@@ -1,0 +1,78 @@
+*.log
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Backup directories (keep local only)
+backups/
+
+# Temporary sync files
+.sync_in_progress
+.sync_temp/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS generated files
+*.swp
+*.swo
+*~
+
+# Personal notes or temp docs
+NOTES.md
+TODO.md
+scratch.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# Note: We DO want to track src/lib/ (our code), just not build lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Linting and formatting
+.ruff_cache/
+.mypy_cache/
+
+# Track these important config files:
+# .superclaude-metadata.json (framework metadata)
+# settings.json and settings.local.json (configuration)
+
+
+tmp/
+.serena/
