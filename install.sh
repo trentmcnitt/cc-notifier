@@ -56,9 +56,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Copy hook scripts to installation directory
 echo "📋 Installing hook scripts..."
-cp "$SCRIPT_DIR/src/session_start_hook.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/session_end_hook.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/stop_hook.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/src/cc-notifier-init.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/src/cc-notifier-cleanup.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/src/cc-notifier-notify.sh" "$INSTALL_DIR/"
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR"/*.sh
@@ -79,9 +79,9 @@ echo "⚙️  Generating hook configuration..."
 
 # Create hook configuration with jq (ensures valid JSON)
 HOOK_CONFIG=$(jq -n \
-  --arg session_start "$INSTALL_DIR/session_start_hook.sh" \
-  --arg stop "$INSTALL_DIR/stop_hook.sh" \
-  --arg session_end "$INSTALL_DIR/session_end_hook.sh" \
+  --arg session_start "$INSTALL_DIR/cc-notifier-init.sh" \
+  --arg stop "$INSTALL_DIR/cc-notifier-notify.sh" \
+  --arg session_end "$INSTALL_DIR/cc-notifier-cleanup.sh" \
   '{
     "hooks": {
       "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": $session_start}]}],

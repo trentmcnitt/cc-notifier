@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# stop_hook.sh - Claude Code Stop Hook with Intelligent Notifications
+# cc-notifier-notify.sh - Claude Code Intelligent Notifications
 # Detects if user switched away, sends click-to-focus notification if needed
 
 set +e

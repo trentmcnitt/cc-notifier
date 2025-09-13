@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# session_start_hook.sh - Claude Code SessionStart Hook
+# cc-notifier-init.sh - Claude Code Session Initialization
 # Captures currently focused window ID and saves to session-specific file
 
 set +e

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# session_end_hook.sh - Claude Code SessionEnd Hook
+# cc-notifier-cleanup.sh - Claude Code Session Cleanup
 # Removes session-specific window data file when session ends
 
 set +e
