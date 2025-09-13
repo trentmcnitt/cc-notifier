@@ -10,9 +10,6 @@ set +e
 
 debug_log "NOTIFY: Starting notification check"
 
-HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-TERMINAL_NOTIFIER="/opt/homebrew/bin/terminal-notifier"
-
 # Read and parse JSON input to get session_id and notification data
 if [[ ! -t 0 ]]; then
     HOOK_DATA=$(cat)
@@ -28,7 +25,6 @@ else
 fi
 
 # Create session-specific directory and file paths
-SESSION_DIR="/tmp/claude_window_session"
 SESSION_FILE="$SESSION_DIR/$SESSION_ID"
 
 # Validate prerequisites

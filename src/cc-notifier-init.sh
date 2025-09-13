@@ -8,8 +8,6 @@ source "$(dirname "$0")/lib.sh"
 
 set +e
 
-HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-
 debug_log "INIT: Starting session initialization"
 
 # Read and parse JSON input to get session_id
@@ -21,7 +19,6 @@ else
 fi
 
 # Create session-specific directory and file
-SESSION_DIR="/tmp/claude_window_session"
 SESSION_FILE="$SESSION_DIR/$SESSION_ID"
 
 # Validate prerequisites

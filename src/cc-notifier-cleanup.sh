@@ -19,7 +19,6 @@ else
 fi
 
 # Create session-specific file path
-SESSION_DIR="/tmp/claude_window_session"
 SESSION_FILE="$SESSION_DIR/$SESSION_ID"
 
 # Validate session_id was parsed
