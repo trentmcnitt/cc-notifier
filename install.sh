@@ -56,6 +56,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Copy hook scripts to installation directory
 echo "📋 Installing hook scripts..."
+cp "$SCRIPT_DIR/src/lib.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/src/cc-notifier-init.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/src/cc-notifier-cleanup.sh" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/src/cc-notifier-notify.sh" "$INSTALL_DIR/"

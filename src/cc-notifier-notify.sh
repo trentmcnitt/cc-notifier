@@ -1,9 +1,14 @@
 #!/bin/bash
 
-# cc-notifier-notify.sh - Claude Code Intelligent Notifications
+# cc-notifier-notify.sh - Claude Code Notifier intelligent notifications
 # Detects if user switched away, sends click-to-focus notification if needed
 
+# shellcheck source=src/lib.sh
+source "$(dirname "$0")/lib.sh"
+
 set +e
+
+debug_log "NOTIFY: Starting notification check"
 
 HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER="/opt/homebrew/bin/terminal-notifier"
@@ -45,14 +50,17 @@ CURRENT_ID=$("$HAMMERSPOON_CLI" -c "local w=hs.window.focusedWindow(); print(w a
 # Exit if we can't get current window ID
 [[ "$CURRENT_ID" == "ERROR" || -z "$CURRENT_ID" ]] && exit 1
 
+debug_log "NOTIFY: Window comparison - Current:$CURRENT_ID Original:$WINDOW_ID"
+
 # Check if user is still on the original window
 if [[ "$WINDOW_ID" == "$CURRENT_ID" ]]; then
-    # User is still active on original window - no notification needed
+    debug_log "NOTIFY: User still active, no notification needed"
     exit 0
 fi
 
+debug_log "NOTIFY: User switched away, generating notification"
+
 # Generate dynamic notification content
-# Extract parent/project name from cwd for subtitle
 if [[ -n "$CWD" ]]; then
     PROJECT_NAME=$(basename "$CWD")
     PARENT_NAME=$(basename "$(dirname "$CWD")")
@@ -67,6 +75,8 @@ if [[ "$HOOK_EVENT_NAME" == "Notification" && -n "$HOOK_MESSAGE" ]]; then
 else
     NOTIFICATION_MESSAGE="Completed task"
 fi
+
+debug_log "NOTIFY: Content - Subtitle='$NOTIFICATION_SUBTITLE' Message='$NOTIFICATION_MESSAGE' Event='$HOOK_EVENT_NAME'"
 
 # User has switched away - send intelligent notification with click-to-focus
 HAMMERSPOON_COMMAND="$HAMMERSPOON_CLI -c \"
@@ -87,6 +97,8 @@ end\""
     -sound "Glass" \
     -ignoreDnD \
     -execute "$HAMMERSPOON_COMMAND" &
+
+debug_log "NOTIFY: Notification sent with click-to-focus functionality"
 
 # Exit immediately (don't wait for notification)
 exit 0
