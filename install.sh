@@ -19,7 +19,7 @@ echo "📋 Checking dependencies..."
 HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 if [[ ! -f "$HAMMERSPOON_CLI" ]]; then
     echo "❌ Hammerspoon CLI not found at $HAMMERSPOON_CLI"
-    echo "   Please install Hammerspoon from https://www.hammerspoon.org/ then install the Hammerspoon CLI using "hs.ipc.cliInstall()" from the Hammerspoon console."
+    echo "   Please install Hammerspoon from https://www.hammerspoon.org/ then install the Hammerspoon CLI using \"hs.ipc.cliInstall()\" from the Hammerspoon console."
     exit 1
 fi
 
@@ -66,7 +66,7 @@ echo "✅ Scripts installation complete"
 
 # Test notification permissions
 echo "🔔 Testing notification permissions..."
-terminal-notifier -message "Claude Code Notifier is ready!" -title "Setup Complete" -sound "Hero"
+terminal-notifier -message "Claude Code Notifier is ready!" -title "Setup Complete" -sound "Funk"
 
 # Check if Claude settings file exists
 if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
