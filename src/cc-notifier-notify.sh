@@ -75,6 +75,19 @@ fi
 debug_log "NOTIFY: Content - Subtitle='$NOTIFICATION_SUBTITLE' Message='$NOTIFICATION_MESSAGE' Event='$HOOK_EVENT_NAME'"
 
 # User has switched away - send intelligent notification with click-to-focus
+#
+# HAMMERSPOON WINDOW FILTER WORKAROUND:
+# We use a dual-filter approach instead of setCurrentSpace(nil) due to it causing
+# infinite hangs and IPC port invalidation errors
+#
+# Issue: Issues getting windows accross macOS Spaces (https://github.com/Hammerspoon/hammerspoon/issues/3276#issuecomment-2354681473)
+#
+# Solution: Combine two separate filters (idea taken from https://github.com/Hammerspoon/hammerspoon/issues/3276#issuecomment-2354681473)
+# 1. setCurrentSpace(true)  - Gets windows in current macOS Space
+# 2. setCurrentSpace(false) - Gets windows in other macOS Spaces
+# We then combine the two lists and search for our original window ID to focus it.
+#
+# This approach provides the same functionality as setCurrentSpace(nil) but without hanging.
 HAMMERSPOON_COMMAND="$HAMMERSPOON_CLI -c \"
 local current = require('hs.window.filter').new():setCurrentSpace(true):getWindows()
 local other = require('hs.window.filter').new():setCurrentSpace(false):getWindows()

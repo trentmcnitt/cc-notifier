@@ -42,6 +42,39 @@ export CCN_DEBUG=1
 
 Debug logs written to `/tmp/claude_window_session/cc-notifier.log`
 
+## Hammerspoon Troubleshooting
+
+### Essential Debugging Commands
+
+```bash
+# Reload Hammerspoon configuration
+hs -c "hs.reload()"
+
+# Clear Hammerspoon console for clean testing
+hs -c "hs.console.clearConsole()"
+
+# View recent console logs with timestamps
+hs -c "
+local console = hs.console.getConsole()
+local lines = {}
+for line in console:gmatch('[^\\n]+') do
+    table.insert(lines, line)
+end
+for i = math.max(1, #lines-10), #lines do
+    print(lines[i])
+end"
+
+### Debugging Workflow
+
+1. **Clear console**: `hs -c "hs.console.clearConsole()"`
+2. **Test operation**: Run cc-notifier or test command
+3. **Check console**: View logs with timestamps to correlate errors
+4. **Reload if needed**: `hs -c "hs.reload()"` if Hammerspoon gets stuck
+
+Use alongside `CCN_DEBUG=1` to get detailed logs in `/tmp/claude_window_session/cc-notifier.log`
+
+Check out [Hammerspoon docs](https://www.hammerspoon.org/docs/) for more commands and troubleshooting tips, like [hs.logger](https://www.hammerspoon.org/docs/hs.logger.html)
+
 ## Installation
 
 Run `./install.sh` to set up dependencies and generate Claude Code hook configuration. The installer provides JSON configuration to add to `~/.claude/settings.json`.

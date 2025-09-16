@@ -26,6 +26,24 @@ cd cc-notifier
 ./install.sh
 ```
 
+### 🔧 Hammerspoon Setup
+**Important**: After installing Hammerspoon, ensure these modules are loaded in your `~/.hammerspoon/init.lua`:
+
+```lua
+require("hs.ipc")
+require("hs.window")
+require("hs.window.filter")
+require("hs.timer")
+```
+
+After adding these modules, reload Hammerspoon:
+```bash
+# Reload Hammerspoon configuration (can also use the Hammerspoon GUI)
+hs -c "hs.reload()"
+```
+
+These modules are essential for cc-notifier's cross-space window focusing functionality.
+
 ### ⚡ Quick Start
 After installation, the installer will provide the exact JSON configuration to add to your Claude Code settings at `~/.claude/settings.json`. The configuration will look like this:
 
@@ -102,7 +120,7 @@ After installation, the installer will provide the exact JSON configuration to a
 
 ### Required Dependencies
 - **macOS** - Any recent version
-- **Hammerspoon** - Needed for cross-space window focusing
+- **Hammerspoon** - For cross-space window focusing
   ```bash
   brew install --cask hammerspoon
   ```
@@ -121,7 +139,20 @@ After installation, the installer will provide the exact JSON configuration to a
   brew install shellcheck
   ```
 
-## 🔍 Debug Mode
+## 🔍 Debugging
+
+### Hammerspoon Window Discovery
+
+**For most users, this is automatic** - Hammerspoon tracks windows as you use them normally. However, if you restart or reload Hammerspoon, you may need to help it "discover" windows:
+
+- **Quick fix**: Visit each Space (or at least a few) and click on a few windows before expecting cross-space focus to work
+- **Why**: Hammerspoon's `setCurrentSpace(false)` filter can only find windows in Spaces you've already visited
+- **When this matters**: Only after restarting/reloading Hammerspoon (e.g., during debugging)
+- **Normal usage**: Since Hammerspoon is usually set to launch at login and runs continuously, regular workflow naturally populates its window cache
+
+This is rarely an issue in practice - if you use multiple Spaces, you'll naturally visit them during normal work, allowing Hammerspoon to track all windows automatically. But when debugging or testing, just remember it can act funny until you've visited a few spaces and clicked on some windows.
+
+### Debug Logging
 
 Enable detailed logging to troubleshoot issues:
 

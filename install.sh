@@ -100,6 +100,21 @@ echo ""
 echo "   Note: If you already have a 'hooks' section, merge the hook types accordingly."
 
 echo ""
+echo "🔧 Required Hammerspoon Configuration:"
+echo ""
+echo "Add these lines to your ~/.hammerspoon/init.lua file:"
+echo ""
+echo 'require("hs.ipc")'
+echo 'require("hs.window")'
+echo 'require("hs.window.filter")'
+echo 'require("hs.timer")'
+echo ""
+echo "After adding these modules:"
+echo "1. Save the file"
+echo "2. Reload Hammerspoon config: hs -c \"hs.reload()\" (or use the Hammerspoon GUI)"
+echo "3. Or restart Hammerspoon.app"
+
+echo ""
 echo "🎉 Installation complete!"
 echo ""
 echo "📖 How it works:"
