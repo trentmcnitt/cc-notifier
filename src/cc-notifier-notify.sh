@@ -76,8 +76,10 @@ debug_log "NOTIFY: Content - Subtitle='$NOTIFICATION_SUBTITLE' Message='$NOTIFIC
 
 # User has switched away - send intelligent notification with click-to-focus
 HAMMERSPOON_COMMAND="$HAMMERSPOON_CLI -c \"
-local wf=require('hs.window.filter').new():setCurrentSpace(nil)
-for _,w in pairs(wf:getWindows()) do
+local current = require('hs.window.filter').new():setCurrentSpace(true):getWindows()
+local other = require('hs.window.filter').new():setCurrentSpace(false):getWindows()
+for _,w in pairs(other) do table.insert(current, w) end
+for _,w in pairs(current) do
   if w:id()==$WINDOW_ID then
     w:focus()
     require('hs.timer').usleep(300000)
