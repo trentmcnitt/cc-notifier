@@ -1,8 +1,8 @@
 # cc-notifier 🔔
 
-**Intelligent macOS notifications for Claude Code that bring you back with a single click**
+**Intelligent macOS notifications for Claude Code that bring you back to your original window with a single click**
 
-Smart, context-aware notifications that know when you switch away and gently bring you back when Claude Code completes tasks. Never miss a completion again! 🚀
+Smart, context-aware notifications that know when you switch away and gently bring you back when Claude Code completes tasks or needs input from you. Never miss a completion again! 🚀
 
 ## ✨ What Makes cc-notifier Special
 
@@ -13,6 +13,8 @@ Smart, context-aware notifications that know when you switch away and gently bri
 - **🔧 Zero Configuration** - Works out of the box with intelligent defaults
 - **⚡ Lightning Fast** - Minimal overhead, maximum responsiveness
 
+Most notification systems only take you to the app, not the exact window you were working in, which isn't ideal when you have multiple IDE or terminal windows open.
+- cc-notifier solves this by tracking the exact window you were using and restoring focus to it, even if it's in a different Space.
 
 ## ⚙️ Installation
 
@@ -45,7 +47,7 @@ hs -c "hs.reload()"
 These modules are essential for cc-notifier's cross-space window focusing functionality.
 
 ### ⚡ Quick Start
-After installation, the installer will provide the exact JSON configuration to add to your Claude Code settings at `~/.claude/settings.json`. The configuration will look like this:
+After installation, the installer will provide the exact JSON configuration to add to your Claude Code settings at `~/.claude/settings.json`. If `~/.local/bin` is in your PATH, the configuration will look like this (using simple commands):
 
 ```json
 {
@@ -56,7 +58,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/<your username>/.claude-code-notifier/cc-notifier-init.sh"
+            "command": "cc-notifier init"
           }
         ]
       }
@@ -67,7 +69,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/<your username>/.claude-code-notifier/cc-notifier-notify.sh"
+            "command": "cc-notifier notify"
           }
         ]
       }
@@ -78,7 +80,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/<your username>/.claude-code-notifier/cc-notifier-notify.sh"
+            "command": "cc-notifier notify"
           }
         ]
       }
@@ -89,7 +91,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/<your username>/.claude-code-notifier/cc-notifier-cleanup.sh"
+            "command": "cc-notifier cleanup"
           }
         ]
       }
@@ -98,21 +100,21 @@ After installation, the installer will provide the exact JSON configuration to a
 }
 ```
 
-**Important**: Copy the exact configuration from the installer output, as it will contain the correct paths for your system.
+**Important**: Copy the exact configuration from the installer output, as it will detect whether `~/.local/bin` is in your PATH and provide the appropriate command format (simple `cc-notifier` commands or full paths like `~/.local/bin/cc-notifier`).
 
 ## 🏗️ How It Works
 
 ### Core Components
 
-1. **`cc-notifier-init.sh` **- The Session Tracker**
+1. **`cc-notifier init`** - The Session Tracker
    - Captures current window ID when Claude Code starts
    - Stores session info as a temporary file for later focus restoration
 
-2. **`cc-notifier-notify.sh` **- The Smart Notifier**
+2. **`cc-notifier notify`** - The Smart Notifier
    - Only triggers if you switched away from original window
    - Delivers elegant macOS notifications with click-to-focus action
 
-3. **`cc-notifier-cleanup.sh` **- The Cleanup Crew**
+3. **`cc-notifier cleanup`** - The Cleanup Crew
    - Removes session files after completion
    - Keeps your system tidy
 
@@ -157,11 +159,11 @@ This is rarely an issue in practice - if you use multiple Spaces, you'll natural
 Enable detailed logging to troubleshoot issues:
 
 ```bash
-# Enable debug mode
-export CCN_DEBUG=1
+# In the Claude Code settings.json, call the hook you want to debug with like this:
+`CCN_DEBUG=1 cc-notifier <command>`
 
 # Check debug logs
-tail -f /tmp/claude_window_session/cc-notifier.log
+tail -f /tmp/claude_code_notifier/cc-notifier.log
 ```
 
 Debug logs show:
@@ -186,16 +188,32 @@ make clean
 
 ### Architecture Overview
 
+### Development Structure
 ```
 cc-notifier/
 ├── src/                    # Core hook scripts
-│   ├── cc-notifier-init.sh     # SessionStart hook
-│   ├── cc-notifier-notify.sh   # Stop/Notification hooks
-│   ├── cc-notifier-cleanup.sh  # SessionEnd hook
+│   ├── cc-notifier             # Main command dispatcher
+│   ├── cc-notifier-init.sh     # SessionStart hook (called by cc-notifier init)
+│   ├── cc-notifier-notify.sh   # Stop/Notification hooks (called by cc-notifier notify)
+│   ├── cc-notifier-cleanup.sh  # SessionEnd hook (called by cc-notifier cleanup)
 │   └── lib.sh                  # Shared utilities
 ├── install.sh             # Installation wizard
 ├── uninstall.sh           # Clean removal
 └── Makefile              # Development tasks
+```
+
+### Installation Structure
+After running `./install.sh`, files are installed to standard Unix locations:
+```
+~/.local/
+├── bin/
+│   └── cc-notifier         # Main command (in PATH if ~/.local/bin is in PATH)
+└── share/
+    └── cc-notifier/        # Support files
+        ├── lib.sh
+        ├── cc-notifier-init.sh
+        ├── cc-notifier-notify.sh
+        └── cc-notifier-cleanup.sh
 ```
 
 ## 🌟 Why cc-notifier?

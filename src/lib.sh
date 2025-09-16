@@ -2,10 +2,10 @@
 # lib.sh - CC-Notifier Shared Utilities
 
 # Path constants
-SESSION_DIR="/tmp/claude_window_session"
+SESSION_DIR="/tmp/claude_code_notifier"
 # shellcheck disable=SC2034  # Used by sourcing scripts
 HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-# shellcheck disable=SC2034  # Used by sourcing scripts  
+# shellcheck disable=SC2034  # Used by sourcing scripts
 TERMINAL_NOTIFIER="/opt/homebrew/bin/terminal-notifier"
 
 # Configuration

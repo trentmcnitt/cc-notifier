@@ -5,21 +5,29 @@
 
 set -e
 
-# Installation directory
-INSTALL_DIR="$HOME/.claude-code-notifier"
+# Installation directories
+BIN_DIR="$HOME/.local/bin"
+SHARE_DIR="$HOME/.local/share/cc-notifier"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-SESSION_DIR="/tmp/claude_window_session"
+SESSION_DIR="/tmp/claude_code_notifier"
 
 echo "🗑️  Uninstalling Claude Code Notifier..."
-echo "📁 Installation directory: $INSTALL_DIR"
 
-# Remove installation directory and all contents
-if [[ -d "$INSTALL_DIR" ]]; then
-    echo "🔧 Removing installation directory..."
-    rm -rf "$INSTALL_DIR"
-    echo "✅ Installation directory removed"
+# Remove installation files
+if [[ -f "$BIN_DIR/cc-notifier" ]]; then
+    echo "🔧 Removing command from $BIN_DIR..."
+    rm -f "$BIN_DIR/cc-notifier"
+    echo "✅ Command removed"
 else
-    echo "ℹ️  Installation directory not found (already removed or never installed)"
+    echo "ℹ️  Command not found at $BIN_DIR/cc-notifier"
+fi
+
+if [[ -d "$SHARE_DIR" ]]; then
+    echo "🔧 Removing support files from $SHARE_DIR..."
+    rm -rf "$SHARE_DIR"
+    echo "✅ Support files removed"
+else
+    echo "ℹ️  Support directory not found at $SHARE_DIR"
 fi
 
 # Remove temporary session files
@@ -42,10 +50,10 @@ if [[ -f "$CLAUDE_SETTINGS" ]]; then
         echo "Remove the hook configuration from: $CLAUDE_SETTINGS"
         echo ""
         echo "Look for and remove the 'hooks' section containing:"
-        echo "- SessionStart hook pointing to $INSTALL_DIR/cc-notifier-init.sh"
-        echo "- Stop hook pointing to $INSTALL_DIR/cc-notifier-notify.sh"
-        echo "- Notification hook pointing to $INSTALL_DIR/cc-notifier-notify.sh"
-        echo "- SessionEnd hook pointing to $INSTALL_DIR/cc-notifier-cleanup.sh"
+        echo "- SessionStart hook with 'cc-notifier init' or '$BIN_DIR/cc-notifier init'"
+        echo "- Stop hook with 'cc-notifier notify' or '$BIN_DIR/cc-notifier notify'"
+        echo "- Notification hook with 'cc-notifier notify' or '$BIN_DIR/cc-notifier notify'"
+        echo "- SessionEnd hook with 'cc-notifier cleanup' or '$BIN_DIR/cc-notifier cleanup'"
         echo ""
         echo "Or remove just the hook entries if other hooks exist."
     else
@@ -59,9 +67,9 @@ echo ""
 echo "🎉 Uninstallation complete!"
 echo ""
 echo "📋 What was removed:"
-echo "- Hook scripts from $INSTALL_DIR"
+echo "- Hook scripts from $SHARE_DIR"
 echo "- Installation directory"
-echo "- Session directory and temporary files from /tmp/claude_window_session"
+echo "- Session directory and temporary files from /tmp/claude_code_notifier"
 echo ""
 echo "📋 Manual cleanup (if needed):"
 echo "- Remove hook configuration from ~/.claude/settings.json"

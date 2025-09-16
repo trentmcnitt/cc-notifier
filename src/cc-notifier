@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# cc-notifier - Command dispatcher for Claude Code Notifier
+# Routes subcommands to appropriate hook scripts
+
+SCRIPT_DIR="$HOME/.local/share/cc-notifier"
+
+case "$1" in
+    init)
+        exec "$SCRIPT_DIR/cc-notifier-init.sh"
+        ;;
+    notify)
+        exec "$SCRIPT_DIR/cc-notifier-notify.sh"
+        ;;
+    cleanup)
+        exec "$SCRIPT_DIR/cc-notifier-cleanup.sh"
+        ;;
+    *)
+        echo "Usage: cc-notifier {init|notify|cleanup}"
+        echo ""
+        echo "Commands:"
+        echo "  init    - Initialize session (capture focused window)"
+        echo "  notify  - Send notification if user switched away"
+        echo "  cleanup - Clean up session files"
+        echo ""
+        echo "Debug Mode:"
+        echo "  Enable debug logging: CCN_DEBUG=1 cc-notifier <command>"
+        echo "  Debug logs written to: /tmp/claude_code_notifier/cc-notifier.log"
+        echo ""
+        echo "This is the command dispatcher for Claude Code Notifier hooks."
+        exit 1
+        ;;
+esac

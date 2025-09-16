@@ -14,18 +14,22 @@ cc-notifier is a macOS notification system for Claude Code hooks. It provides in
 
 ## Architecture
 
-The system consists of three hook scripts that integrate with Claude Code's hook system:
+The system consists of a main dispatcher command that routes to specialized hook scripts:
 
-- **cc-notifier-init.sh** - SessionStart hook: Captures focused window ID using Hammerspoon
-- **cc-notifier-notify.sh** - Stop/Notification hooks: Sends notifications if user switched away, includes click-to-focus
-- **cc-notifier-cleanup.sh** - SessionEnd hook: Cleans up session files
+- **cc-notifier** - Main command dispatcher with subcommands (init, notify, cleanup)
+- **cc-notifier init** - SessionStart hook: Captures focused window ID using Hammerspoon
+- **cc-notifier notify** - Stop/Notification hooks: Sends notifications if user switched away, includes click-to-focus
+- **cc-notifier cleanup** - SessionEnd hook: Cleans up session files
 
 ### Key Components
 
-- **Session tracking**: Window IDs stored in `/tmp/claude_window_session/{session_id}`
+- **Command dispatcher**: `cc-notifier` main command with subcommands (init, notify, cleanup)
+- **Installation**: Standard Unix locations (`~/.local/bin` and `~/.local/share/cc-notifier`)
+- **Session tracking**: Window IDs stored in `/tmp/claude_code_notifier/{session_id}`
 - **Window management**: Uses Hammerspoon CLI for cross-space window focusing via `hs.window.filter`
 - **Notifications**: terminal-notifier with `-execute` parameter for click-to-focus functionality
 - **Intelligence**: Only notifies if user actually switched away from original window
+- **PATH support**: Installer detects and adapts hook configuration based on PATH setup
 
 ## Dependencies
 
@@ -40,7 +44,7 @@ Enable debug logging:
 export CCN_DEBUG=1
 ```
 
-Debug logs written to `/tmp/claude_window_session/cc-notifier.log`
+Debug logs written to `/tmp/claude_code_notifier/cc-notifier.log`
 
 ## Hammerspoon Troubleshooting
 
@@ -71,7 +75,7 @@ end"
 3. **Check console**: View logs with timestamps to correlate errors
 4. **Reload if needed**: `hs -c "hs.reload()"` if Hammerspoon gets stuck
 
-Use alongside `CCN_DEBUG=1` to get detailed logs in `/tmp/claude_window_session/cc-notifier.log`
+Use alongside `CCN_DEBUG=1` to get detailed logs in `/tmp/claude_code_notifier/cc-notifier.log`
 
 Check out [Hammerspoon docs](https://www.hammerspoon.org/docs/) for more commands and troubleshooting tips, like [hs.logger](https://www.hammerspoon.org/docs/hs.logger.html)
 
