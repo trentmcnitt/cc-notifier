@@ -188,6 +188,8 @@ make clean
 
 ### Architecture Overview
 
+For technical background on key challenges and discoveries, see [`docs/RESEARCH_LOG.md`](docs/RESEARCH_LOG.md). The document covers technical problems that had to be solved for cross-space window focusing on macOS.
+
 ### Development Structure
 ```
 cc-notifier/

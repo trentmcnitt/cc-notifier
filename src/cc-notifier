@@ -3,6 +3,7 @@
 # cc-notifier - Command dispatcher for Claude Code Notifier
 # Routes subcommands to appropriate hook scripts
 
+VERSION="0.1.0"
 SCRIPT_DIR="$HOME/.local/share/cc-notifier"
 
 case "$1" in
