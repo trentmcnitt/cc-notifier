@@ -100,8 +100,6 @@ After installation, the installer will provide the exact JSON configuration to a
 }
 ```
 
-**Important**: Copy the exact configuration from the installer output, as it will detect whether `~/.local/bin` is in your PATH and provide the appropriate command format (simple `cc-notifier` commands or full paths like `~/.local/bin/cc-notifier`).
-
 ## 🏗️ How It Works
 
 ### Core Components
