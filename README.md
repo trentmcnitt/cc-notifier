@@ -2,7 +2,7 @@
 
 **Intelligent macOS notifications for Claude Code that bring you back to your original window with a single click**
 
-Smart, context-aware notifications that know when you switch away and gently bring you back when Claude Code completes tasks or needs input from you. Never miss a completion again! 🚀
+Smart, context-aware notifications that know when you switch away and gently bring you back when Claude Code completes tasks or needs input from you.
 
 ## ✨ What Makes cc-notifier Special
 
@@ -140,6 +140,23 @@ After installation, the installer will provide the exact JSON configuration to a
   ```bash
   brew install shellcheck
   ```
+
+## 💡 Troubleshooting
+
+### Wrong Window Being Focused
+**Problem**: Notifications take you to the wrong window instead of where Claude Code was originally running.
+
+**Cause**: The window ID is captured when Claude Code starts a session. A "session" starts when:
+- Claude Code launches for the first time
+- You clear or resume a session
+
+If you start/resume Claude Code in one window then immediately switch to another window, it captures the wrong window ID.
+
+**Solution**:
+- Restart Claude Code, OR
+- Clear and resume your session (Cmd+Shift+P → "Claude Code: Clear and Resume Session")
+
+**Prevention**: Make sure Claude Code is focused in your intended work window when starting or resuming a session.
 
 ## 🔍 Debugging
 
