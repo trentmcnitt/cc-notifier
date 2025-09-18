@@ -5,29 +5,20 @@
 
 set -e
 
-# Installation directories
-BIN_DIR="$HOME/.local/bin"
-SHARE_DIR="$HOME/.local/share/cc-notifier"
+# Installation directory
+INSTALL_DIR="$HOME/.claude-code-notifier"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 SESSION_DIR="/tmp/claude_code_notifier"
 
 echo "🗑️  Uninstalling Claude Code Notifier..."
 
 # Remove installation files
-if [[ -f "$BIN_DIR/cc-notifier" ]]; then
-    echo "🔧 Removing command from $BIN_DIR..."
-    rm -f "$BIN_DIR/cc-notifier"
-    echo "✅ Command removed"
+if [[ -d "$INSTALL_DIR" ]]; then
+    echo "🔧 Removing installation directory $INSTALL_DIR..."
+    rm -rf "$INSTALL_DIR"
+    echo "✅ Installation directory removed"
 else
-    echo "ℹ️  Command not found at $BIN_DIR/cc-notifier"
-fi
-
-if [[ -d "$SHARE_DIR" ]]; then
-    echo "🔧 Removing support files from $SHARE_DIR..."
-    rm -rf "$SHARE_DIR"
-    echo "✅ Support files removed"
-else
-    echo "ℹ️  Support directory not found at $SHARE_DIR"
+    echo "ℹ️  Installation directory not found at $INSTALL_DIR"
 fi
 
 # Remove temporary session files
@@ -50,10 +41,10 @@ if [[ -f "$CLAUDE_SETTINGS" ]]; then
         echo "Remove the hook configuration from: $CLAUDE_SETTINGS"
         echo ""
         echo "Look for and remove the 'hooks' section containing:"
-        echo "- SessionStart hook with 'cc-notifier init' or '$BIN_DIR/cc-notifier init'"
-        echo "- Stop hook with 'cc-notifier notify' or '$BIN_DIR/cc-notifier notify'"
-        echo "- Notification hook with 'cc-notifier notify' or '$BIN_DIR/cc-notifier notify'"
-        echo "- SessionEnd hook with 'cc-notifier cleanup' or '$BIN_DIR/cc-notifier cleanup'"
+        echo "- SessionStart hook with '$INSTALL_DIR/cc-notifier init'"
+        echo "- Stop hook with '$INSTALL_DIR/cc-notifier notify'"
+        echo "- Notification hook with '$INSTALL_DIR/cc-notifier notify'"
+        echo "- SessionEnd hook with '$INSTALL_DIR/cc-notifier cleanup'"
         echo ""
         echo "Or remove just the hook entries if other hooks exist."
     else
@@ -67,8 +58,7 @@ echo ""
 echo "🎉 Uninstallation complete!"
 echo ""
 echo "📋 What was removed:"
-echo "- Hook scripts from $SHARE_DIR"
-echo "- Installation directory"
+echo "- Installation directory: $INSTALL_DIR"
 echo "- Session directory and temporary files from /tmp/claude_code_notifier"
 echo ""
 echo "📋 Manual cleanup (if needed):"

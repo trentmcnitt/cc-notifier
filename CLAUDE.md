@@ -24,12 +24,12 @@ The system consists of a main dispatcher command that routes to specialized hook
 ### Key Components
 
 - **Command dispatcher**: `cc-notifier` main command with subcommands (init, notify, cleanup)
-- **Installation**: Standard Unix locations (`~/.local/bin` and `~/.local/share/cc-notifier`)
+- **Installation**: Single directory location (`~/.claude-code-notifier/`)
 - **Session tracking**: Window IDs stored in `/tmp/claude_code_notifier/{session_id}`
 - **Window management**: Uses Hammerspoon CLI for cross-space window focusing via `hs.window.filter`
 - **Notifications**: terminal-notifier with `-execute` parameter for click-to-focus functionality
 - **Intelligence**: Only notifies if user actually switched away from original window
-- **PATH support**: Installer detects and adapts hook configuration based on PATH setup
+- **Self-contained**: All files in single directory, no PATH dependencies
 
 ## Dependencies
 

@@ -47,7 +47,7 @@ hs -c "hs.reload()"
 These modules are essential for cc-notifier's cross-space window focusing functionality.
 
 ### ⚡ Quick Start
-After installation, the installer will provide the exact JSON configuration to add to your Claude Code settings at `~/.claude/settings.json`. If `~/.local/bin` is in your PATH, the configuration will look like this (using simple commands):
+After installation, the installer will provide the exact JSON configuration to add to your Claude Code settings at `~/.claude/settings.json`. The configuration uses absolute paths and will look like this:
 
 ```json
 {
@@ -58,7 +58,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "cc-notifier init"
+            "command": "$HOME/.claude-code-notifier/cc-notifier init"
           }
         ]
       }
@@ -69,7 +69,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "cc-notifier notify"
+            "command": "$HOME/.claude-code-notifier/cc-notifier notify"
           }
         ]
       }
@@ -80,7 +80,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "cc-notifier notify"
+            "command": "$HOME/.claude-code-notifier/cc-notifier notify"
           }
         ]
       }
@@ -91,7 +91,7 @@ After installation, the installer will provide the exact JSON configuration to a
         "hooks": [
           {
             "type": "command",
-            "command": "cc-notifier cleanup"
+            "command": "$HOME/.claude-code-notifier/cc-notifier cleanup"
           }
         ]
       }
@@ -220,17 +220,14 @@ cc-notifier/
 ```
 
 ### Installation Structure
-After running `./install.sh`, files are installed to standard Unix locations:
+After running `./install.sh`, all files are installed to a single directory:
 ```
-~/.local/
-├── bin/
-│   └── cc-notifier         # Main command (in PATH if ~/.local/bin is in PATH)
-└── share/
-    └── cc-notifier/        # Support files
-        ├── lib.sh
-        ├── cc-notifier-init.sh
-        ├── cc-notifier-notify.sh
-        └── cc-notifier-cleanup.sh
+~/.claude-code-notifier/    # Single flat directory - no PATH pollution
+├── cc-notifier             # Main command dispatcher
+├── lib.sh                  # Shared utilities
+├── cc-notifier-init.sh     # SessionStart hook
+├── cc-notifier-notify.sh   # Stop/Notification hook
+└── cc-notifier-cleanup.sh  # SessionEnd hook
 ```
 
 ## 🌟 Why cc-notifier?
