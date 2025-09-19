@@ -7,7 +7,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 lint: ## Lint shell scripts with shellcheck
-	@shellcheck --severity=info --enable=all src/*.sh *.sh && echo "✅ LINT: PASSED" || (echo "❌ LINT: FAILED" && false)
+	@shellcheck --severity=info --enable=all src/*.sh *.sh src/cc-notifier && echo "✅ LINT: PASSED" || (echo "❌ LINT: FAILED" && false)
 
 check: ## Run quality checks
 	@echo "🔍 Running shell script quality checks..."

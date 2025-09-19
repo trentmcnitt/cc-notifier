@@ -3,7 +3,7 @@ repos:
     rev: v0.9.0.6
     hooks:
       - id: shellcheck
-        files: ^(src/.*\.sh$|.*\.sh$)
+        files: ^(src/.*\.sh$|.*\.sh$|src/cc-notifier$)
         args: [--severity=info, --enable=all]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

@@ -16,8 +16,12 @@ case "$1" in
     cleanup)
         exec "$SCRIPT_DIR/cc-notifier-cleanup.sh"
         ;;
+    --version|-v)
+        echo "cc-notifier $VERSION"
+        exit 0
+        ;;
     *)
-        echo "Usage: cc-notifier {init|notify|cleanup}"
+        echo "Usage: cc-notifier {init|notify|cleanup|--version}"
         echo ""
         echo "Commands:"
         echo "  init    - Initialize session (capture focused window)"

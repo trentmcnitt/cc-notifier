@@ -28,23 +28,25 @@ fi
 SESSION_FILE="$SESSION_DIR/$SESSION_ID"
 
 # Validate prerequisites
-[[ -f "$HAMMERSPOON_CLI" && -f "$TERMINAL_NOTIFIER" && -n "$SESSION_ID" ]] || exit 1
+[[ -f "$HAMMERSPOON_CLI" ]] || error_exit "Hammerspoon CLI not found at $HAMMERSPOON_CLI"
+[[ -f "$TERMINAL_NOTIFIER" ]] || error_exit "terminal-notifier not found at $TERMINAL_NOTIFIER"
+[[ -n "$SESSION_ID" ]] || error_exit "SESSION_ID is empty"
 
 # Validate session file exists
-[[ ! -f "$SESSION_FILE" ]] && exit 1
+[[ -f "$SESSION_FILE" ]] || error_exit "Session file not found: $SESSION_FILE"
 
 # Load original window ID from session file
 # shellcheck source=/dev/null
 source "$SESSION_FILE"
 
 # Validate WINDOW_ID was loaded from session file
-[[ -n "$WINDOW_ID" ]] || exit 1
+[[ -n "$WINDOW_ID" ]] || error_exit "WINDOW_ID not found in session file: $SESSION_FILE"
 
 # Get current focused window ID
 CURRENT_ID=$("$HAMMERSPOON_CLI" -c "local w=hs.window.focusedWindow(); print(w and w:id() or 'ERROR')" 2>/dev/null)
 
 # Exit if we can't get current window ID
-[[ "$CURRENT_ID" == "ERROR" || -z "$CURRENT_ID" ]] && exit 1
+[[ "$CURRENT_ID" != "ERROR" && -n "$CURRENT_ID" ]] || error_exit "Failed to get current window ID from Hammerspoon"
 
 debug_log "NOTIFY: Window comparison - Current:$CURRENT_ID Original:$WINDOW_ID"
 
@@ -59,8 +61,7 @@ debug_log "NOTIFY: User switched away, generating notification"
 # Generate dynamic notification content
 if [[ -n "$CWD" ]]; then
     PROJECT_NAME=$(basename "$CWD")
-    PARENT_NAME=$(basename "$(dirname "$CWD")")
-    NOTIFICATION_SUBTITLE="$PARENT_NAME/$PROJECT_NAME"
+    NOTIFICATION_SUBTITLE="$PROJECT_NAME"
 else
     NOTIFICATION_SUBTITLE="Task Completed"
 fi

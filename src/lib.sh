@@ -22,3 +22,10 @@ debug_log() {
         echo "$timestamp [$$] $*" >> "$LOG_FILE"
     fi
 }
+
+# Error exit function - outputs to both stderr and debug log
+error_exit() {
+    echo "ERROR: $*" >&2
+    debug_log "ERROR: $*"
+    exit 1
+}
