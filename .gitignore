@@ -42,7 +42,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-# Note: We DO want to track src/lib/ (our code), just not build lib/
 lib64/
 parts/
 sdist/

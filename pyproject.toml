@@ -1,0 +1,147 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cc-notifier"
+version = "0.2.0"
+description = "macOS notification system for Claude Code hooks with intelligent window management"
+readme = "CLAUDE.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Environment :: MacOS X",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Tools",
+    "Topic :: System :: System Shells",
+]
+
+# No runtime dependencies - uses only standard library
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "pre-commit>=3.0",
+    "vulture>=2.0",
+]
+
+[project.scripts]
+cc-notifier = "cc_notifier:main"
+
+[tool.setuptools]
+py-modules = ["cc_notifier"]
+
+# ============================================================================
+# RUFF CONFIGURATION - Modern Python Linting and Formatting
+# ============================================================================
+[tool.ruff]
+exclude = [
+    ".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv",
+    "__pycache__", "build", "dist", "tmp"
+]
+line-length = 88
+target-version = "py39"  # Match project minimum
+src = ["."]
+
+[tool.ruff.lint]
+# AI-focused rule selection for high-quality code generation
+select = [
+    # Core quality
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "RUF",   # Ruff-specific rules
+
+    # AI-specific pattern detection
+    "SIM",   # flake8-simplify - catches AI over-engineering
+    "RET",   # flake8-return - complex return patterns
+    "PERF",  # Performance anti-patterns
+    "C4",    # flake8-comprehensions
+    "C90",   # mccabe complexity
+]
+
+ignore = [
+    # Formatter conflicts
+    "E501",    # Line too long (handled by formatter)
+    "ISC001",  # Conflicts with formatter
+    "COM812",  # Conflicts with formatter
+]
+
+fixable = ["ALL"]
+unfixable = ["B", "RET", "SIM"]  # Force manual review of logic changes
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8  # Keep functions simple for notification tool
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "D", "ANN", "PLR2004", "ARG001"]
+"install.sh" = ["T201", "S603"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+# ============================================================================
+# MYPY CONFIGURATION - Type Checking
+# ============================================================================
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+exclude = ["build/", "dist/", "tmp/"]
+namespace_packages = true
+explicit_package_bases = true
+
+# Relax type checking for tests
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+warn_return_any = false
+warn_unused_ignores = false
+
+# ============================================================================
+# PYTEST CONFIGURATION - Testing Framework
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-v", "--tb=short", "--strict-markers"]
+# Standard pytest configuration
+# No asyncio_mode needed for cc-notifier
+
+# ============================================================================
+# VULTURE CONFIGURATION - Dead Code Detection
+# ============================================================================
+[tool.vulture]
+min_confidence = 70
+paths = ["*.py", "tests"]
+sort_by_size = true
+
+# ============================================================================
+# PYLANCE/PYRIGHT CONFIGURATION - Type Checking in Editors
+# ============================================================================
+[tool.pyright]
+# Align with ruff/mypy standards - disable warnings for valid Python patterns
+reportAttributeAccessIssue = "none"
+

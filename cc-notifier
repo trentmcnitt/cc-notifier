@@ -1,0 +1,6 @@
+#!/bin/bash
+# cc-notifier async wrapper for Claude Code hooks
+# Runs cc-notifier in background for async operation (to prevent blocking)
+stdin_data=$(cat)
+echo "$stdin_data" | python3 "$(dirname "${BASH_SOURCE[0]}")/cc_notifier.py" "$@" >/dev/null 2>&1 &
+exit 0

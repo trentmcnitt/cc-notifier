@@ -1,19 +1,60 @@
-repos:
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.9.0.6
-    hooks:
-      - id: shellcheck
-        files: ^(src/.*\.sh$|.*\.sh$|src/cc-notifier$)
-        args: [--severity=info, --enable=all]
+default_language_version:
+  python: python3.9  # Match project minimum
+fail_fast: true
 
+repos:
+  # Standard checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        files: ^(src/|.*\.md|.*\.sh)$
+        files: ^(tests/|.*\.py|.*\.md|.*\.sh)$
       - id: end-of-file-fixer
-        files: ^(src/|.*\.md|.*\.sh)$
+        files: ^(tests/|.*\.py|.*\.md|.*\.sh)$
       - id: check-yaml
-        files: ^(\.pre-commit-config\.yaml)$
       - id: check-added-large-files
       - id: check-merge-conflict
+
+  # Shell script linting (preserved from original)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        files: ^(.*\.sh$|cc-notifier$)
+        args: [--severity=info, --enable=all]
+
+  # Ruff - Primary Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        name: "🔍 Ruff linting with fixes"
+      - id: ruff-format
+        name: "✨ Ruff formatting"
+
+  # Type checking with MyPy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy
+        args: [--strict, --ignore-missing-imports]
+        files: ^.*\.py$
+
+  # Security scanning
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-r, .]
+        exclude: tests/
+
+  # Fast test subset (when tests exist)
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: "🧪 Fast tests"
+        entry: bash -c 'if [ -n "$(find tests -name "*.py" 2>/dev/null)" ]; then pytest -x -q --tb=short tests/; else echo "No tests found, skipping"; fi'
+        language: system
+        pass_filenames: false
+        stages: [commit]

@@ -1,135 +1,95 @@
 #!/bin/bash
-
-# Claude Code Notifier Installer
-# Installs notification hooks for Claude Code on macOS
-
 set -e
 
-# Installation directory
-INSTALL_DIR="$HOME/.claude-code-notifier"
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+echo "🔧 Installing cc-notifier..."
+echo
 
-echo "🚀 Installing Claude Code Notifier..."
-echo "📁 Installation directory: $INSTALL_DIR"
-
-# Check dependencies
-echo "📋 Checking dependencies..."
-
-# Check Hammerspoon CLI
-HAMMERSPOON_CLI="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-if [[ ! -f "$HAMMERSPOON_CLI" ]]; then
-    echo "❌ Hammerspoon CLI not found at $HAMMERSPOON_CLI"
-    echo "   Please install Hammerspoon from https://www.hammerspoon.org/ then install the Hammerspoon CLI using \"hs.ipc.cliInstall()\" from the Hammerspoon console."
+# Validate environment
+if [ -z "$HOME" ]; then
+    echo "❌ HOME environment variable is not set"
     exit 1
 fi
 
-# Check jq
-if ! command -v jq &>/dev/null; then
-    echo "❌ jq is required but not installed. Installing..."
-    if command -v brew &>/dev/null; then
-        brew install jq
-    else
-        echo "❌ Homebrew not found. Please install jq manually: https://stedolan.github.io/jq/"
-        exit 1
+# Check Python 3.7+
+echo "✅ Checking Python version..."
+python3 -c "import sys; assert sys.version_info >= (3,9), 'Python 3.9+ required'" || {
+    echo "❌ Python 3.9+ is required but not found"
+    echo "   Install with: brew install python3"
+    exit 1
+}
+
+# Check required commands
+echo "✅ Checking required commands..."
+missing_deps=()
+
+for cmd in hs terminal-notifier; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        missing_deps+=("$cmd")
     fi
+done
+
+if [ ${#missing_deps[@]} -ne 0 ]; then
+    echo "❌ Missing required dependencies:"
+    for dep in "${missing_deps[@]}"; do
+        case "$dep" in
+            "hs")
+                echo "   • Hammerspoon CLI - Install with: brew install --cask hammerspoon"
+                echo "     After installing, ensure Hammerspoon is running and CLI is enabled"
+                ;;
+            "terminal-notifier")
+                echo "   • terminal-notifier - Install with: brew install terminal-notifier"
+                ;;
+            *)
+                echo "   • $dep - Unknown dependency"
+                ;;
+        esac
+    done
+    echo
+    echo "📖 See the README for detailed setup instructions: https://github.com/Rendann/cc-notifier#requirements"
+    exit 1
 fi
 
-# Check terminal-notifier
-if ! command -v terminal-notifier &>/dev/null; then
-    echo "❌ terminal-notifier is required but not installed. Installing..."
-    if command -v brew &>/dev/null; then
-        brew install terminal-notifier
-    else
-        echo "❌ Homebrew not found. Please install terminal-notifier manually"
+# Hammerspoon setup reminder
+echo "⚠️  Remember to setup Hammerspoon"
+echo "   See README section: 🔧 Hammerspoon Setup"
+
+# Check source files exist
+echo "✅ Checking source files..."
+for file in cc_notifier.py cc-notifier; do
+    if [ ! -f "$file" ]; then
+        echo "❌ Source file '$file' not found in current directory"
+        echo "   Please run this script from the cc-notifier directory"
         exit 1
     fi
-fi
-
-echo "✅ Dependencies check complete"
+done
 
 # Create installation directory
-echo "🔧 Setting up installation directory..."
-mkdir -p "$INSTALL_DIR"
+echo "📦 Creating installation directory..."
+mkdir -p ~/.cc-notifier
 
-# Get the directory where this install script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Copy files
+echo "📦 Installing files..."
+cp cc_notifier.py ~/.cc-notifier/
+cp cc-notifier ~/.cc-notifier/
+chmod +x ~/.cc-notifier/cc_notifier.py
+chmod +x ~/.cc-notifier/cc-notifier
 
-# Copy all files to installation directory
-echo "📋 Installing files..."
-cp "$SCRIPT_DIR/src/cc-notifier" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/lib.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/cc-notifier-init.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/cc-notifier-cleanup.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/src/cc-notifier-notify.sh" "$INSTALL_DIR/"
+echo "✅ Installed to ~/.cc-notifier/"
+echo
+echo "🎯 REQUIRED NEXT STEPS TO COMPLETE SETUP:"
+echo
+echo "1. 🔧 CONFIGURE HAMMERSPOON (Required)"
+echo "2. ⚙️  ADD TO CLAUDE CODE HOOKS (Required)"
+echo
+echo "📖 See README for complete configuration details:"
+echo "   https://github.com/Rendann/cc-notifier#installation"
+echo
+echo "cc-notifier will not work until both steps are completed!"
 
-# Make all files executable
-chmod +x "$INSTALL_DIR/cc-notifier"
-chmod +x "$INSTALL_DIR"/*.sh
-echo "✅ Files installation complete"
-
-# Test notification permissions
-echo "🔔 Testing notification permissions..."
-terminal-notifier -message "Claude Code Notifier is ready!" -title "Setup Complete" -sound "Funk"
-
-# Set command path (always use absolute path)
-COMMAND_PREFIX="$INSTALL_DIR/cc-notifier"
-
-# Check if Claude settings file exists
-if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
-    echo "📁 Creating Claude settings directory..."
-    mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
-fi
-
-# Generate hook configuration using jq for clean, validated JSON
-echo "⚙️  Generating hook configuration..."
-
-# Create hook configuration with jq (ensures valid JSON)
-HOOK_CONFIG=$(jq -n \
-  --arg session_start "$COMMAND_PREFIX init" \
-  --arg stop "$COMMAND_PREFIX notify" \
-  --arg session_end "$COMMAND_PREFIX cleanup" \
-  '{
-    "hooks": {
-      "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": $session_start}]}],
-      "Stop": [{"matcher": "", "hooks": [{"type": "command", "command": $stop}]}],
-      "Notification": [{"matcher": "", "hooks": [{"type": "command", "command": $stop}]}],
-      "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": $session_end}]}]
-    }
-  }')
-
-echo ""
-echo "📋 Add this to your ~/.claude/settings.json:"
-echo ""
-echo "$HOOK_CONFIG"
-echo ""
-echo "   Note: If you already have a 'hooks' section, merge the hook types accordingly."
-
-echo ""
-echo "🔧 Required Hammerspoon Configuration:"
-echo ""
-echo "Add these lines to your ~/.hammerspoon/init.lua file:"
-echo ""
-echo 'require("hs.ipc")'
-echo 'require("hs.window")'
-echo 'require("hs.window.filter")'
-echo 'require("hs.timer")'
-echo ""
-echo "After adding these modules:"
-echo "1. Save the file"
-echo "2. Reload Hammerspoon config: hs -c \"hs.reload()\" (or use the Hammerspoon GUI)"
-echo "3. Or restart Hammerspoon.app"
-
-
-echo ""
-echo "🎉 Installation complete!"
-echo ""
-echo "📖 How it works:"
-echo "1. When you start a Claude Code session, it captures your current window"
-echo "2. When Claude finishes and you've switched to another app, you get a notification"
-echo "3. Click the notification to return to your original window"
-echo "4. If you're still on the original window, no notification is sent"
-echo ""
-echo "📁 Installation: $INSTALL_DIR"
-echo "⚙️  Configuration: ~/.claude/settings.json"
-echo ""
-echo "Happy coding! 🚀"
+# Send success notification
+echo "📬 Sending success notification..."
+terminal-notifier \
+    -title "cc-notifier Installation Successful!" \
+    -message "Check terminal for next steps" \
+    -sound "Funk" \
+    -timeout 10
