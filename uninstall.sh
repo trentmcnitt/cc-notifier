@@ -1,68 +1,62 @@
 #!/bin/bash
-
-# Claude Code Notifier Uninstaller
-# Removes notification hooks for Claude Code on macOS
-
 set -e
 
-# Installation directory
-INSTALL_DIR="$HOME/.claude-code-notifier"
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-SESSION_DIR="/tmp/claude_code_notifier"
+echo "🗑️  Uninstalling cc-notifier..."
+echo
 
-echo "🗑️  Uninstalling Claude Code Notifier..."
-
-# Remove installation files
-if [[ -d "$INSTALL_DIR" ]]; then
-    echo "🔧 Removing installation directory $INSTALL_DIR..."
-    rm -rf "$INSTALL_DIR"
-    echo "✅ Installation directory removed"
-else
-    echo "ℹ️  Installation directory not found at $INSTALL_DIR"
+# Validate environment
+if [ -z "$HOME" ]; then
+    echo "❌ HOME environment variable is not set"
+    exit 1
 fi
 
-# Remove temporary session files
-if [[ -d "$SESSION_DIR" ]]; then
-    echo "🔧 Removing session directory and temporary files..."
-    rm -rf "$SESSION_DIR"
-    echo "✅ Session directory removed"
-else
-    echo "ℹ️  Session directory not found (already removed or no active sessions)"
+# Check if cc-notifier is installed
+echo "✅ Checking for existing installation..."
+if [ ! -d "$HOME/.cc-notifier" ]; then
+    echo "⚠️  cc-notifier is not installed (no ~/.cc-notifier directory found)"
+    echo "   Nothing to uninstall."
+    exit 0
 fi
 
-# Check if Claude settings file exists
-if [[ -f "$CLAUDE_SETTINGS" ]]; then
-    echo "⚙️  Checking Claude settings..."
-    
-    # Check if our hooks are configured
-    if grep -q "claude-code-notifier" "$CLAUDE_SETTINGS" 2>/dev/null; then
-        echo ""
-        echo "📋 Manual step required:"
-        echo "Remove the hook configuration from: $CLAUDE_SETTINGS"
-        echo ""
-        echo "Look for and remove the 'hooks' section containing:"
-        echo "- SessionStart hook with '$INSTALL_DIR/cc-notifier init'"
-        echo "- Stop hook with '$INSTALL_DIR/cc-notifier notify'"
-        echo "- Notification hook with '$INSTALL_DIR/cc-notifier notify'"
-        echo "- SessionEnd hook with '$INSTALL_DIR/cc-notifier cleanup'"
-        echo ""
-        echo "Or remove just the hook entries if other hooks exist."
-    else
-        echo "✅ No Claude Code notifier hooks found in settings"
-    fi
-else
-    echo "ℹ️  Claude settings file not found"
+echo "📦 Found cc-notifier installation at ~/.cc-notifier/"
+
+# Remove main installation directory
+echo "📦 Removing installation directory..."
+rm -rf "$HOME/.cc-notifier"
+
+# Clean up session files if they exist
+if [ -d "/tmp/cc_notifier" ]; then
+    echo "🧹 Cleaning up session files..."
+    rm -rf "/tmp/cc_notifier"
 fi
 
-echo ""
-echo "🎉 Uninstallation complete!"
-echo ""
-echo "📋 What was removed:"
-echo "- Installation directory: $INSTALL_DIR"
-echo "- Session directory and temporary files from /tmp/claude_code_notifier"
-echo ""
-echo "📋 Manual cleanup (if needed):"
-echo "- Remove hook configuration from ~/.claude/settings.json"
-echo "- Dependencies (jq, terminal-notifier, Hammerspoon) were left installed"
-echo ""
-echo "Thank you for using Claude Code Notifier! 👋"
+echo "✅ Removed from ~/.cc-notifier/"
+echo
+
+echo "🎯 REQUIRED NEXT STEPS TO COMPLETE REMOVAL:"
+echo
+echo "1. 🔧 REMOVE CLAUDE CODE HOOKS (Required)"
+echo "   Edit ~/.claude/settings.json and remove the cc-notifier hooks"
+echo
+echo "2. 🔨 REMOVE ANY HAMMERSPOON CONFIGURATION"
+echo
+echo "3. 📦 OPTIONAL: Remove dependencies if not needed elsewhere"
+echo "   These may be used by other applications:"
+echo "   • brew uninstall terminal-notifier"
+echo "   • brew uninstall --cask hammerspoon"
+echo
+
+# Send success notification if terminal-notifier is available
+if command -v terminal-notifier >/dev/null 2>&1; then
+    echo "📬 Sending success notification..."
+    terminal-notifier \
+        -title "cc-notifier Uninstalled Successfully!" \
+        -message "Check terminal for manual cleanup steps" \
+        -sound "Funk" \
+        -timeout 10
+else
+    echo "📬 terminal-notifier not available, skipping notification"
+fi
+
+echo "✅ cc-notifier has been uninstalled!"
+echo "   Remember to remove the Claude Code hooks from ~/.claude/settings.json"
