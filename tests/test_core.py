@@ -6,6 +6,7 @@ Focuses on essential user-facing behaviors that must work reliably.
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,7 @@ class TestCLIInterface:
         with (
             pytest.raises(SystemExit) as exc_info,
             patch.object(sys, "argv", ["cc-notifier"]),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -39,6 +41,7 @@ class TestCLIInterface:
         with (
             pytest.raises(SystemExit) as exc_info,
             patch.object(sys, "argv", ["cc-notifier", "invalid"]),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -49,7 +52,10 @@ class TestCLIInterface:
     def test_main_version_flag_shows_version(self, capsys):
         """Test --version and -v flags return correct version."""
         for flag in ["--version", "-v"]:
-            with patch.object(sys, "argv", ["cc-notifier", flag]):
+            with (
+                patch.object(sys, "argv", ["cc-notifier", flag]),
+                patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+            ):
                 cc_notifier.main()
 
             captured = capsys.readouterr()
@@ -82,6 +88,7 @@ class TestCLIInterface:
                 patch("cc_notifier.HookData.from_stdin") as mock_stdin,
                 patch("cc_notifier.get_focused_window_id") as mock_window,
                 patch("cc_notifier.save_window_id") as mock_save,
+                patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
             ):
                 # Setup mocks to allow init to complete
                 mock_stdin.return_value = cc_notifier.HookData(session_id="test")
@@ -118,6 +125,7 @@ class TestCLIInterface:
                 "cc_notifier.get_focused_window_id",
                 side_effect=ValueError("Test error"),
             ),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
             pytest.raises(SystemExit) as exc_info,
         ):
             cc_notifier.main()
@@ -129,6 +137,35 @@ class TestCLIInterface:
         content = log_file.read_text()
         assert "Command 'notify' failed" in content
         assert "ValueError: Test error" in content
+
+    def test_main_blocks_direct_execution_without_wrapper_env(self, capsys):
+        """Test main() blocks execution without CC_NOTIFIER_WRAPPER environment variable."""
+        with (
+            pytest.raises(SystemExit) as exc_info,
+            patch.object(sys, "argv", ["cc-notifier", "--version"]),
+            patch.dict(os.environ, {}, clear=True),  # Clear environment
+        ):
+            cc_notifier.main()
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert (
+            "ERROR: cc_notifier.py should not be run directly in Claude Code hooks."
+            in captured.err
+        )
+        assert "Use: cc-notifier wrapper instead" in captured.err
+        assert "Running directly will block Claude Code execution!" in captured.err
+
+    def test_main_allows_execution_with_wrapper_env(self, capsys):
+        """Test main() allows execution when CC_NOTIFIER_WRAPPER is set."""
+        with (
+            patch.object(sys, "argv", ["cc-notifier", "--version"]),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        captured = capsys.readouterr()
+        assert f"cc-notifier {cc_notifier.VERSION}" in captured.out
 
 
 class TestCoreWorkflows:
@@ -144,6 +181,7 @@ class TestCoreWorkflows:
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -168,6 +206,7 @@ class TestCoreWorkflows:
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
             patch("cc_notifier.check_idle_and_notify_push"),  # Mock push notifications
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -203,6 +242,7 @@ class TestCoreWorkflows:
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
             patch("cc_notifier.check_idle_and_notify_push"),  # Mock push notifications
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -246,6 +286,7 @@ class TestCoreWorkflows:
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "cleanup"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
@@ -279,6 +320,7 @@ class TestCoreWorkflows:
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "cleanup"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 

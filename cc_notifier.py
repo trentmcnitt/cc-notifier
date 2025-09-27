@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
-DEFAULT_IDLE_CHECK_INTERVALS = [3]  # Shortened for testing
+DEFAULT_IDLE_CHECK_INTERVALS = [3, 15]  # Shortened for testing
 
 # Debug configuration
 DEBUG = False
@@ -58,6 +59,16 @@ def handle_command_errors(
 
 def main() -> None:
     """Main entry point for cc-notifier command."""
+
+    # Guard against direct execution in hooks
+    if not os.getenv("CC_NOTIFIER_WRAPPER"):
+        print(
+            "ERROR: cc_notifier.py should not be run directly in Claude Code hooks.",
+            file=sys.stderr,
+        )
+        print("Use: cc-notifier wrapper instead", file=sys.stderr)
+        print("Running directly will block Claude Code execution!", file=sys.stderr)
+        sys.exit(1)
 
     global DEBUG
     if "--debug" in sys.argv:
@@ -168,7 +179,6 @@ def check_deduplication(session_file: Path) -> bool:
                 < NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS
             ):
                 return True
-            # Update timestamp immediately to prevent race condition
             f.seek(0)
             f.write(f"{lines[0]}\n{time.time()}")
             f.truncate()
@@ -382,9 +392,10 @@ def create_notification_data(
             dt = time.localtime(now)
             milliseconds = int((now % 1) * 1000)
             timestamp = f"{time.strftime('%H:%M:%S', dt)}.{milliseconds:03d}"
+            title = f"{title} [{timestamp}]"  # Debug mode always shows timestamp
         else:
             timestamp = time.strftime("%I:%M %p").lstrip("0")
-        title = f"{title} [{timestamp}]"
+            # title = f"{title} [{timestamp}]"
     else:
         title = "Claude Code 🔔"
         if DEBUG:
