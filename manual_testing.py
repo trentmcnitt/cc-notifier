@@ -56,6 +56,8 @@ def get_push_credentials() -> tuple[Optional[str], Optional[str]]:
 def run_command(cmd: str, debug: bool = False) -> None:
     """Run cc-notifier command with test data."""
     env = os.environ.copy()
+    # Set wrapper environment variable to allow direct execution of cc_notifier.py
+    env["CC_NOTIFIER_WRAPPER"] = "1"
     token, user = get_push_credentials()
     if token and user:
         env.update({"PUSHOVER_API_TOKEN": token, "PUSHOVER_USER_KEY": user})
@@ -114,7 +116,10 @@ def test_notification(
         print("📱 Sending test local notification...")
         if debug:
             # Apply debug formatting like cc_notifier.py does
-            current_time = time.strftime("%H:%M:%S.%f")[:-3]  # HH:MM:SS.mmm
+            now = time.time()
+            dt = time.localtime(now)
+            milliseconds = int((now % 1) * 1000)
+            current_time = f"{time.strftime('%H:%M:%S', dt)}.{milliseconds:03d}"
             title = f"[DEBUG] {title} [{current_time}]"
             print(f"🔍 Debug title: {title}")
 
