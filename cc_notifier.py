@@ -28,7 +28,7 @@ MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
-DEFAULT_IDLE_CHECK_INTERVALS = [3, 15]  # Shortened for testing
+DEFAULT_IDLE_CHECK_INTERVALS = [3, 20]
 
 # Debug configuration
 DEBUG = False
