@@ -62,7 +62,7 @@ Most notification systems only take you to the app, not the exact window you wer
 
 ### Optional Dependencies
 - **Pushover account** - For push notifications when away from computer
-  - Sign up at [pushover.net](https://pushover.net) (free with 7,500 messages/month)
+  - Sign up at [pushover.net](https://pushover.net)
   - No additional software installation required
 
 ### Optional Development Tools
@@ -120,7 +120,7 @@ Add the hook configuration to your `~/.claude/settings.json` - see [Claude Code 
 ### 5. Start a new Claude Code session
 Tell it to do something simple like "just say hi" then:
 - Switch to another window before it responds, to see if local notifications work
-- Don't touch your mouse/keyboard for up to a minute to see if push notifications work (if configured)
+- Step away from your computer to see if push notifications work (if configured)
 
 **You should see a notification!** Click it to test the focus functionality.
 
@@ -309,7 +309,9 @@ cc-notifier/
 ├── cc_notifier.py               # Consolidated monolithic script
 ├── manual_testing.py           # Interactive testing utility
 ├── tests/
-│   └── test_essentials.py       # Basic functionality tests
+│   ├── test_core.py            # Core functionality tests
+│   ├── test_integrations.py    # Integration tests
+│   └── tests.context.md        # Testing documentation
 ├── pyproject.toml               # Modern Python project configuration
 ├── Makefile                     # Development workflow commands
 ├── .pre-commit-config.yaml      # Quality enforcement hooks
