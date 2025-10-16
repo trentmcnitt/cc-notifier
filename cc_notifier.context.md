@@ -5,7 +5,10 @@ Associated with: `cc-notifier.py` and `cc-notifier` bash wrapper
 Primarily a high-level architectural reference, not a detailed implementation guide. It should be kept in sync with the actual codebase.
 
 ## Overview
-`cc-notifier.py` is meant to be run as a background process via the `cc-notifier` bash wrapper, which in turn is called by Claude Code hooks. It contains the code to provide intelligent macOS notifications with click-to-focus functionality, and push notifications if the user is away from their computer.
+`cc-notifier.py` is meant to be run as a background process via the `cc-notifier` bash wrapper, which in turn is called by Claude Code hooks. It provides intelligent notifications for both local macOS (desktop mode) and remote SSH (remote mode) environments.
+
+**Desktop Mode**: macOS notifications with click-to-focus and optional push notifications
+**Remote Mode**: Push notifications only (auto-detected via SSH environment variables)
 
 ## Key Components
 
@@ -20,29 +23,34 @@ Flows are in the order they are executed, and are performed synchronously, unles
 
 ### `cc-notifier init`
 **Trigger**: Claude Code SessionStart hook (Runs when Claude Code starts a new session or resumes an existing session)
-**Purpose**: Capture the currently focused window ID when Claude Code starts a session
+**Purpose**: Capture the currently focused window ID (desktop) or save placeholder (remote)
 **Flow**:
 1. Parse session data from stdin JSON
-2. Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
+2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
+   **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
 3. Save window ID + timestamp to `/tmp/cc_notifier/{session_id}`
 4. Exit immediately
 
 ### `cc-notifier notify`
 **Trigger**: Claude Code Stop/Notification hooks (Stop: Runs when the main Claude Code agent has finished responding. Notification: Runs when Claude needs to notify the user, which is either when it needs permission to use a tool, or when the prompt has been idle for 60 seconds)
-**Purpose**: Send intelligent local notifications when user switched away from original window and check if user is away from computer for push notifications
+**Purpose**: Send intelligent notifications based on environment (local macOS or remote SSH/tmux)
 **Flow**:
 1. Parse hook data from stdin JSON
 2. Load original window ID from session file
 3. Check deduplication threshold (prevent spam within X seconds)
-4. Get current focused window ID via Hammerspoon CLI
-5. Compare original vs current window ID
-  - Same window (user is not focused on another app): Don't send local notification, but continue to push check
-  - Different window (user is focused on another app):
-    1. Send local notification immediately via terminal-notifier with click-to-focus
-    2. Update session timestamp
-6. If push credentials exist, check user idle status at progressive intervals
-    - If user becomes active at any check: exit early, no push notification
-    - If user stays idle through all checks: send push notification via Pushover API
+4. **Desktop Mode Only**:
+   - Get current focused window ID via Hammerspoon CLI
+   - Compare original vs current window ID
+     - Same window: Don't send local notification, continue to push check
+     - Different window: Send local notification via terminal-notifier with click-to-focus
+   - Update session timestamp
+5. **Remote Mode Only**: Skip local notifications entirely
+6. **Push Notifications** (if push credentials exist):
+   - Check idle status using ioreg (desktop) or TTY st_atime (remote)
+   - Progressive interval checks [3s, 20s]
+   - Baseline comparison: captures idle time at start, detects if user provided input (idle time decreased)
+   - Exit early if user becomes active
+   - Send push via Pushover if idle through all checks
 7. Exit
 
 ### `cc-notifier cleanup`
@@ -55,7 +63,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 4. Exit
 
 ### `cc-notifier --version` / `cc-notifier -v`
-**Purpose**: Display current version (0.2.0)
+**Purpose**: Display current version (0.3.0)
 **Flow**: Print version string and exit
 
 ### Debug Mode

@@ -30,6 +30,7 @@ Most notification systems only take you to the app, not the exact window you wer
 **Configuration & Usage:**
 - [🔧 Claude Code Configuration](#claude-code-configuration) - Full JSON config
 - [📲 How Push Notifications Work](#how-push-notifications-work) - Advanced features
+- [🌐 Remote Usage (SSH/tmux)](#-remote-usage-sshtmux) - Use cc-notifier remotely
 
 **Help & Development:**
 - [💡 Troubleshooting](#troubleshooting) - Fix common issues
@@ -49,8 +50,10 @@ Most notification systems only take you to the app, not the exact window you wer
 ## 🛠️ Requirements
 
 ### Required Dependencies
-- **macOS** - Any recent version
 - **Python 3.9+** - Core implementation language (uses only standard library)
+
+### Desktop Mode Dependencies (macOS local usage)
+- **macOS** - Any recent version
 - **Hammerspoon** - For cross-space window focusing
   ```bash
   brew install --cask hammerspoon
@@ -60,10 +63,13 @@ Most notification systems only take you to the app, not the exact window you wer
   brew install terminal-notifier
   ```
 
-### Optional Dependencies
-- **Pushover account** - For push notifications when away from computer
+### Remote Mode Dependencies (SSH usage)
+- **Pushover account** (required) - Push notifications are the only notification method in remote mode
   - Sign up at [pushover.net](https://pushover.net)
   - No additional software installation required
+
+### Optional Dependencies
+- **Pushover account** - For push notifications in desktop mode when away from computer
 
 ### Optional Development Tools
 Development dependencies are only needed for contributors and are managed via virtual environment:
@@ -213,6 +219,32 @@ export PUSHOVER_USER_KEY="your_pushover_user_key"
 ## 📲 How Push Notifications Work
 
 cc-notifier sends local notifications immediately, then starts a background process that monitors user activity. If you remain idle through multiple checks, it sends a push notification. Push notifications activate automatically when both `PUSHOVER_API_TOKEN` and `PUSHOVER_USER_KEY` are configured.
+
+## 🌐 Remote Usage (SSH)
+
+**NEW in v0.3.0:** cc-notifier now supports remote sessions via SSH/mosh with intelligent idle detection using TTY access times!
+
+When running Claude Code on a remote server (detected via `SSH_CONNECTION` environment variable), cc-notifier automatically switches to **remote mode**:
+
+### Remote Mode Behavior
+- ✅ **No local notifications** - Skips macOS terminal-notifier (not useful on remote server)
+- ✅ **No window focusing** - Skips Hammerspoon dependency (not applicable remotely)
+- ✅ **Push notifications only** - Uses Pushover for all notifications (Pushover credentials required)
+- ✅ **Intelligent idle detection** - Uses TTY access time tracking to detect user input
+
+### Setup for Remote Usage
+**Configure Pushover** - Required for remote mode (push notifications are the only notification method)
+```bash
+# Add to ~/.zshrc, ~/.bashrc, or ~/.bash_profile on remote server
+export PUSHOVER_API_TOKEN="your_pushover_app_token"
+export PUSHOVER_USER_KEY="your_pushover_user_key"
+```
+
+### How It Works Remotely
+cc-notifier monitors TTY access time (st_atime), which updates only when the TTY is read (user input). If no user input is detected during the check intervals (3s, then 20s), it sends a push notification.
+
+### Limitations
+Remote mode cannot detect "visual presence" (you reading output without typing). This is the same limitation as desktop mode - idle detection is based on input activity, not visual engagement.
 
 ## 🏗️ How It Works
 

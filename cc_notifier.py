@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 # Constants and configuration
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 SESSION_DIR = Path("/tmp/cc_notifier")
 CLEANUP_AGE_SECONDS = 5 * 24 * 60 * 60
 NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0
@@ -94,7 +94,11 @@ def main() -> None:
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID."""
     hook_data = HookData.from_stdin()
-    window_id = get_focused_window_id()
+    if is_remote_session():
+        window_id = "REMOTE"
+        debug_log("Remote session detected, skipping window capture")
+    else:
+        window_id = get_focused_window_id()
     save_window_id(hook_data.session_id, window_id)
 
 
@@ -108,9 +112,15 @@ def cmd_notify() -> None:
         return
 
     original_window_id = session_file.read_text().strip().split("\n")[0]
-    send_local_notification_if_needed(hook_data, original_window_id)
-    if os.getenv("PUSHOVER_API_TOKEN") and os.getenv("PUSHOVER_USER_KEY"):
-        debug_log("Checking for push notification")
+
+    # Local notifications only in desktop mode
+    if not is_remote_session():
+        send_local_notification_if_needed(hook_data, original_window_id)
+
+    # Push notifications if configured
+    push_config = PushConfig.from_env()
+    if push_config:
+        debug_log("Checking for push notification with idle detection")
         check_idle_and_notify_push(hook_data, DEFAULT_IDLE_CHECK_INTERVALS)
 
 
@@ -315,6 +325,18 @@ def log_error(error_msg: str, exception: Optional[Exception] = None) -> None:
 
 
 # ============================================================================
+# ENVIRONMENT DETECTION - Remote vs Desktop Mode
+# ============================================================================
+
+
+def is_remote_session() -> bool:
+    """Detect if running in remote SSH session."""
+    return bool(
+        os.getenv("SSH_CONNECTION") or os.getenv("SSH_CLIENT") or os.getenv("SSH_TTY")
+    )
+
+
+# ============================================================================
 # HAMMERSPOON INTEGRATION - Cross-Space Window Management
 # ============================================================================
 
@@ -506,7 +528,7 @@ def send_pushover_notification(config: PushConfig, title: str, message: str) -> 
         return False
 
 
-def get_idle_time() -> int:
+def get_macos_idle_time() -> int:
     """Get macOS system idle time in seconds using ioreg."""
     try:
         output = run_command(["ioreg", "-c", "IOHIDSystem"], timeout=5)
@@ -519,16 +541,29 @@ def get_idle_time() -> int:
         raise RuntimeError(f"ioreg command timed out after {e.timeout} seconds") from e
 
 
-def is_user_idle(seconds: int) -> bool:
-    """Check if user has been idle for specified duration."""
+def get_tty_idle_time() -> int:
+    """Get TTY idle time in seconds based on last read operation (user input)."""
     try:
-        return bool(get_idle_time() >= seconds)
-    except RuntimeError:
-        return False  # Assume user is active if detection fails
+        tty_stat = os.stat("/dev/tty")
+        last_read_time = tty_stat.st_atime
+        return int(time.time() - last_read_time)
+    except (OSError, ValueError) as e:
+        raise RuntimeError("Unable to get TTY idle time") from e
+
+
+def get_idle_time() -> int:
+    """Get idle time in seconds, environment-aware."""
+    if is_remote_session():
+        return get_tty_idle_time()
+    return get_macos_idle_time()
 
 
 def check_idle_and_notify_push(hook_data: HookData, check_times: list[int]) -> None:
-    """Check if user is idle at specified intervals and send push notification if away."""
+    """Check if user is idle at specified intervals and send push notification if away.
+
+    Uses baseline comparison: captures idle time when hook triggers, then checks if
+    user provided input (idle time decreased) during the check intervals.
+    """
     push_config = PushConfig.from_env()
     if not push_config:
         return
@@ -536,11 +571,26 @@ def check_idle_and_notify_push(hook_data: HookData, check_times: list[int]) -> N
     if not check_times:
         raise ValueError("check_times cannot be empty")
 
+    # Capture baseline idle time to detect relative changes
+    try:
+        baseline_idle = get_idle_time()
+    except RuntimeError:
+        # If idle detection fails, assume user is active
+        return
+
     previous_time = 0
     for check_time in check_times:
         time.sleep(check_time - previous_time)
-        if not is_user_idle(check_time):
-            return  # User became active, exit early
+
+        try:
+            current_idle = get_idle_time()
+            if current_idle < baseline_idle:
+                # User provided input since hook triggered (idle time decreased)
+                return
+        except RuntimeError:
+            # If idle detection fails, assume user is active
+            return
+
         previous_time = check_time
 
     # User has been idle through all checks, send push notification

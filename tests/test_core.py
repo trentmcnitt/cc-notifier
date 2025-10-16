@@ -479,3 +479,129 @@ class TestSessionFileOperations:
                 pytest.raises(FileNotFoundError),
             ):
                 cc_notifier.load_window_id("nonexistent_session")
+
+
+class TestRemoteMode:
+    """Test remote session detection and remote mode behaviors."""
+
+    def test_remote_session_detection(self):
+        """Test is_remote_session() correctly detects SSH environment variables."""
+        # Test with no SSH variables - desktop mode
+        with patch.dict(os.environ, {}, clear=True):
+            assert cc_notifier.is_remote_session() is False
+
+        # Test with SSH_CONNECTION - remote mode
+        with patch.dict(os.environ, {"SSH_CONNECTION": "1.2.3.4 12345 5.6.7.8 22"}):
+            assert cc_notifier.is_remote_session() is True
+
+        # Test with SSH_CLIENT - remote mode
+        with patch.dict(os.environ, {"SSH_CLIENT": "1.2.3.4 12345 22"}):
+            assert cc_notifier.is_remote_session() is True
+
+        # Test with SSH_TTY - remote mode
+        with patch.dict(os.environ, {"SSH_TTY": "/dev/pts/0"}):
+            assert cc_notifier.is_remote_session() is True
+
+    def test_remote_mode_init_uses_placeholder(self, tmp_path):
+        """Test cmd_init() uses placeholder window ID in remote mode."""
+        test_input = {"session_id": "remote123", "cwd": "/test/path"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_WRAPPER": "1",
+                    "SSH_CONNECTION": "1.2.3.4 12345 5.6.7.8 22",
+                },
+            ),
+        ):
+            cc_notifier.main()
+
+        # Verify placeholder window ID was saved
+        session_file = session_dir / "remote123"
+        assert session_file.exists()
+        content = session_file.read_text().strip()
+        assert content == "REMOTE\n0"
+
+    def test_remote_mode_skips_local_notification(self, tmp_path):
+        """Test cmd_notify() skips local notifications in remote mode."""
+        test_input = {"session_id": "remote123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "remote123").write_text("REMOTE\n0")
+
+        with (
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_WRAPPER": "1",
+                    "SSH_CONNECTION": "1.2.3.4 12345 5.6.7.8 22",
+                },
+            ),
+        ):
+            cc_notifier.main()
+
+        # Verify no terminal-notifier subprocess started (remote mode skips local notifications)
+        if mock_popen.called:
+            popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+            terminal_notifier_calls = [
+                cmd
+                for cmd in popen_calls
+                if any("terminal-notifier" in str(arg) for arg in cmd)
+            ]
+            assert len(terminal_notifier_calls) == 0
+
+    def test_tty_idle_detection(self):
+        """Test get_tty_idle_time() correctly calculates idle time from TTY st_atime."""
+        # Mock current time and TTY stat
+        current_time = 1234567890
+        last_read_time = current_time - 25  # 25 seconds ago
+
+        class MockStat:
+            st_atime = last_read_time
+
+        with (
+            patch("time.time", return_value=current_time),
+            patch("os.stat", return_value=MockStat()),
+        ):
+            idle_time = cc_notifier.get_tty_idle_time()
+
+        assert idle_time == 25  # Should calculate correct idle duration
+
+    def test_baseline_idle_detection(self):
+        """Test check_idle_and_notify_push() uses baseline comparison to detect user input."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+        push_config = cc_notifier.PushConfig(token="test_token", user="test_user")
+
+        # Scenario: User was idle for 30 seconds when hook triggered,
+        # then provided input after 2 seconds (idle time reset to 0)
+        baseline_idle = 30  # User idle for 30 seconds when hook triggered
+        idle_after_2s = 2  # After 2s delay, user is idle for only 2s (provided input!)
+
+        call_count = 0
+
+        def mock_get_idle_time():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return baseline_idle  # Initial baseline capture
+            return idle_after_2s  # User provided input (idle time decreased)
+
+        with (
+            patch("cc_notifier.PushConfig.from_env", return_value=push_config),
+            patch("cc_notifier.get_idle_time", side_effect=mock_get_idle_time),
+            patch("time.sleep"),  # Skip actual sleep
+            patch("cc_notifier.send_pushover_notification") as mock_send,
+        ):
+            cc_notifier.check_idle_and_notify_push(hook_data, [3])
+
+        # Verify push notification was NOT sent (user provided input)
+        mock_send.assert_not_called()
