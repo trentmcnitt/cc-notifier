@@ -3,5 +3,14 @@
 # Runs cc-notifier in background for async operation (to prevent blocking)
 stdin_data=$(cat)
 export CC_NOTIFIER_WRAPPER=1
+# Get TTY from process table (works even with stdin redirected)
+# In tmux: returns the tmux pseudo-terminal (e.g., /dev/ttys025), not SSH layer
+CURRENT_TTY=$(ps -o tty= -p $$ | xargs | sed 's/^/\/dev\//')
+if [ -n "$CURRENT_TTY" ] && [ "$CURRENT_TTY" != "/dev/?" ]; then
+    export CC_NOTIFIER_TTY="$CURRENT_TTY"
+elif [ -n "$SSH_TTY" ]; then
+    # Fallback to SSH_TTY in SSH sessions
+    export CC_NOTIFIER_TTY="$SSH_TTY"
+fi
 echo "$stdin_data" | python3 "$(dirname "${BASH_SOURCE[0]}")/cc_notifier.py" "$@" >/dev/null 2>&1 &
 exit 0
