@@ -28,7 +28,8 @@ MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
-DEFAULT_IDLE_CHECK_INTERVALS = [3, 4]
+PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
+PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 
 # Debug configuration
 DEBUG = False
@@ -121,7 +122,12 @@ def cmd_notify() -> None:
     push_config = PushConfig.from_env()
     if push_config:
         debug_log("Checking for push notification with idle detection")
-        check_idle_and_notify_push(hook_data, DEFAULT_IDLE_CHECK_INTERVALS)
+        intervals = (
+            PUSH_IDLE_CHECK_INTERVALS_REMOTE
+            if is_remote_session()
+            else PUSH_IDLE_CHECK_INTERVALS_DESKTOP
+        )
+        check_idle_and_notify_push(hook_data, intervals)
 
 
 @handle_command_errors("cleanup")
@@ -496,8 +502,33 @@ class PushConfig:
         return None
 
 
-def send_pushover_notification(config: PushConfig, title: str, message: str) -> bool:
+def build_push_url(hook_data: HookData) -> Optional[str]:
+    """Build push notification URL from env var template.
+
+    Substitutes {cwd} and {session_id} placeholders with actual values.
+
+    Returns:
+        URL with placeholders substituted, or None if not configured.
+    """
+    url_template = os.getenv("CC_NOTIFIER_PUSH_URL")
+    if not url_template:
+        return None
+
+    url = url_template.format(cwd=hook_data.cwd, session_id=hook_data.session_id)
+    debug_log(f"Push URL built: {url}")
+    return url
+
+
+def send_pushover_notification(
+    config: PushConfig, title: str, message: str, url: Optional[str] = None
+) -> bool:
     """Send notification via Pushover API.
+
+    Args:
+        config: Pushover API configuration
+        title: Notification title
+        message: Notification message
+        url: Optional URL to open when notification is tapped
 
     Returns:
         True if Pushover API returned {"status":1}, False otherwise.
@@ -507,14 +538,16 @@ def send_pushover_notification(config: PushConfig, title: str, message: str) -> 
     title = title[:250] if len(title) > 250 else title
     message = message[:1024] if len(message) > 1024 else message
 
-    data = urllib.parse.urlencode(
-        {
-            "token": config.token,
-            "user": config.user,
-            "title": title,
-            "message": message,
-        }
-    ).encode("utf-8")
+    data_dict = {
+        "token": config.token,
+        "user": config.user,
+        "title": title,
+        "message": message,
+    }
+    if url:
+        data_dict["url"] = url
+
+    data = urllib.parse.urlencode(data_dict).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.pushover.net/1/messages.json",
@@ -624,8 +657,9 @@ def check_idle_and_notify_push(hook_data: HookData, check_times: list[int]) -> N
 
     # User has been idle through all checks, send push notification
     title, _, message = create_notification_data(hook_data, for_push=True)
+    push_url = build_push_url(hook_data)
     debug_log(f"Sending push notification: '{title}'")
-    send_pushover_notification(push_config, title, message)
+    send_pushover_notification(push_config, title, message, url=push_url)
 
 
 # ============================================================================

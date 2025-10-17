@@ -597,3 +597,97 @@ class TestRemoteMode:
 
         # Verify push notification was NOT sent (user was active)
         mock_send.assert_not_called()
+
+
+class TestPushNotificationURL:
+    """Test push notification URL construction and encoding."""
+
+    def test_build_push_url_substitutes_placeholders(self):
+        """Test build_push_url() substitutes {cwd} and {session_id} placeholders."""
+        hook_data = cc_notifier.HookData(session_id="abc123", cwd="/Users/test/project")
+        url_template = "blinkshell://run?key=531915&cmd=cd {cwd} && ls"
+
+        with patch.dict(os.environ, {"CC_NOTIFIER_PUSH_URL": url_template}):
+            result = cc_notifier.build_push_url(hook_data)
+
+        expected = "blinkshell://run?key=531915&cmd=cd /Users/test/project && ls"
+        assert result == expected
+
+    def test_build_push_url_preserves_query_parameters(self):
+        """Test query parameters (?, &, =) are preserved in custom URL schemes."""
+        hook_data = cc_notifier.HookData(session_id="xyz789", cwd="/home/user/work")
+        url_template = "myapp://action?session={session_id}&path={cwd}&flag=true"
+
+        with patch.dict(os.environ, {"CC_NOTIFIER_PUSH_URL": url_template}):
+            result = cc_notifier.build_push_url(hook_data)
+
+        expected = "myapp://action?session=xyz789&path=/home/user/work&flag=true"
+        assert result == expected
+        # Verify all query parameter characters preserved
+        assert "?" in result
+        assert "&" in result
+        assert "=" in result
+
+    def test_build_push_url_returns_none_when_not_configured(self):
+        """Test build_push_url() returns None when CC_NOTIFIER_PUSH_URL not set."""
+        hook_data = cc_notifier.HookData(session_id="test123", cwd="/test/path")
+
+        with patch.dict(os.environ, {}, clear=True):
+            result = cc_notifier.build_push_url(hook_data)
+
+        assert result is None
+
+    def test_build_push_url_with_special_characters_in_path(self):
+        """Test URL construction with special characters in cwd path."""
+        hook_data = cc_notifier.HookData(
+            session_id="test123", cwd="/Users/orlando/My Projects/app-v2.0"
+        )
+        url_template = "blinkshell://run?cmd=cd {cwd}"
+
+        with patch.dict(os.environ, {"CC_NOTIFIER_PUSH_URL": url_template}):
+            result = cc_notifier.build_push_url(hook_data)
+
+        expected = "blinkshell://run?cmd=cd /Users/orlando/My Projects/app-v2.0"
+        assert result == expected
+        # Note: Spaces are user's responsibility to handle in their command/script
+
+    def test_push_url_survives_urlencode(self):
+        """Test that custom URL schemes survive urllib.parse.urlencode() for POST body."""
+        hook_data = cc_notifier.HookData(session_id="test123", cwd="/home/user/project")
+        url_template = (
+            "blinkshell://run?key=531915&cmd=mosh mbp -- ~/bin/start.sh {cwd}"
+        )
+
+        with patch.dict(os.environ, {"CC_NOTIFIER_PUSH_URL": url_template}):
+            push_url = cc_notifier.build_push_url(hook_data)
+
+        # Simulate what send_pushover_notification does
+        import urllib.parse
+
+        data_dict = {
+            "token": "test_token",
+            "user": "test_user",
+            "title": "Test",
+            "message": "Test message",
+            "url": push_url,
+        }
+        encoded_data = urllib.parse.urlencode(data_dict)
+
+        # Verify URL is present in encoded POST body
+        assert "url=" in encoded_data
+        assert "blinkshell" in encoded_data
+
+        # Decode and verify URL survived encoding/decoding
+        decoded = urllib.parse.parse_qs(encoded_data)
+        recovered_url = decoded["url"][0]
+
+        expected_url = (
+            "blinkshell://run?key=531915&cmd=mosh mbp -- ~/bin/start.sh "
+            "/home/user/project"
+        )
+        assert recovered_url == expected_url
+        # Verify critical URL components survived
+        assert "blinkshell://" in recovered_url
+        assert "key=531915" in recovered_url
+        assert "cmd=mosh" in recovered_url
+        assert "/home/user/project" in recovered_url

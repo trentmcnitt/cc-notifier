@@ -216,6 +216,43 @@ export PUSHOVER_API_TOKEN="your_pushover_app_token"
 export PUSHOVER_USER_KEY="your_pushover_user_key"
 ```
 
+### Customizing Push Notification URLs
+
+**NEW:** You can configure push notifications to open a custom URL when tapped (e.g., to launch Blink Shell and reconnect to your session):
+
+```json
+{
+  "env": {
+    "PUSHOVER_API_TOKEN": "your_pushover_app_token",
+    "PUSHOVER_USER_KEY": "your_pushover_user_key",
+    "CC_NOTIFIER_PUSH_URL": "blinkshell://run?key=YOUR_KEY&cmd=mosh mbp -- ~/bin/mosh-cc-resume.sh {session_id} {cwd}"
+  }
+}
+```
+
+**Available Placeholders:**
+- `{cwd}` - Current working directory from Claude Code hook
+- `{session_id}` - Claude Code session ID
+
+**Example Use Cases:**
+
+**Resume Claude Code session via Blink Shell:**
+```json
+{
+  "env": {
+    "CC_NOTIFIER_PUSH_URL": "blinkshell://run?key=YOUR_KEY&cmd=mosh mbp -- claude -r {session_id}"
+  }
+}
+```
+Tapping the push notification connects via mosh and resumes your exact Claude Code session, bringing you right back to your work.
+
+**Other use cases:**
+- **Run custom scripts**: Execute project-specific setup scripts on your remote server
+- **Custom URL schemes**: Any app that supports URL schemes
+- **Web URLs**: Open specific project dashboards or documentation
+
+**Note:** You are responsible for ensuring the URL is properly formatted. The placeholders `{cwd}` and `{session_id}` will be substituted at runtime, but any special character handling (spaces, etc.) should be managed in your command or script.
+
 ## 📲 How Push Notifications Work
 
 cc-notifier sends local notifications immediately, then starts a background process that monitors user activity. If you remain idle through multiple checks, it sends a push notification. Push notifications activate automatically when both `PUSHOVER_API_TOKEN` and `PUSHOVER_USER_KEY` are configured.
