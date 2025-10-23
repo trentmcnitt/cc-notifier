@@ -30,6 +30,7 @@ Most notification systems only take you to the app, not the exact window you wer
 **Configuration & Usage:**
 - [🔧 Claude Code Configuration](#claude-code-configuration) - Full JSON config
 - [📲 How Push Notifications Work](#how-push-notifications-work) - Advanced features
+- [💫 Code from Anywhere](#-code-from-anywhere) - Mobile development workflow
 - [🌐 Remote Usage (SSH/tmux)](#-remote-usage-sshtmux) - Use cc-notifier remotely
 
 **Help & Development:**
@@ -240,7 +241,7 @@ export PUSHOVER_USER_KEY="your_pushover_user_key"
 ```json
 {
   "env": {
-    "CC_NOTIFIER_PUSH_URL": "blinkshell://run?key=YOUR_KEY&cmd=mosh mbp -- claude -r {session_id}"
+    "CC_NOTIFIER_PUSH_URL": "blinkshell://run?key=YOUR_KEY&cmd=mosh mbp -- ~/bin/mosh-cc-resume.sh {session_id} {cwd}"
   }
 }
 ```
@@ -256,6 +257,22 @@ Tapping the push notification connects via mosh and resumes your exact Claude Co
 ## 📲 How Push Notifications Work
 
 cc-notifier sends local notifications immediately, then starts a background process that monitors user activity. If you remain idle through multiple checks, it sends a push notification. Push notifications activate automatically when both `PUSHOVER_API_TOKEN` and `PUSHOVER_USER_KEY` are configured.
+
+## 💫 Code from Anywhere
+
+Start a task on your desktop, get a notification on your phone, tap it, and you're instantly back in your Claude Code session - from bed, on a walk, anywhere.
+
+**The Flow:**
+1. 🖥️ Start Claude Code task on desktop
+2. 🚶 Walk away (go to bed, commute, anywhere)
+3. 📱 Get push notification on phone
+4. 👆 Tap notification → tap URL
+5. ⚡ Blink Shell auto-opens and mosh reconnects
+6. 💬 Continue coding from exact conversation
+
+**How?** cc-notifier's `CC_NOTIFIER_PUSH_URL` feature + custom scripts = seamless mobile development.
+
+**[📖 Complete mobile workflow setup guide →](mobile/)**
 
 ## ⏰ Preventing Mac Sleep for Long Tasks
 
