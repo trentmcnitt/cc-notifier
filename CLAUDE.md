@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-cc-notifier is a macOS notification system for Claude Code hooks. It provides intelligent notifications when Claude Code completes tasks, with click-to-focus functionality that returns users to their original window across macOS Spaces.
+cc-notifier is a notification system for Claude Code hooks supporting both local macOS and remote SSH environments. It provides intelligent notifications when Claude Code completes tasks, with click-to-focus functionality on macOS and push notifications for remote usage.
 
 **Execution Model**: Runs asynchronously in the background, allowing Claude Code hooks to continue without waiting for notification completion.
+
+**Environment Support** (v0.3.0+):
+- **Desktop Mode**: macOS local usage with Hammerspoon window focusing and terminal-notifier
+- **Remote Mode**: SSH usage with push notifications only (auto-detected via SSH environment variables)
 
 **Hook Reference**: For authoritative details about hook behaviors, execution order, and available data, review the [official Claude Code hooks documentation](https://docs.claude.com/en/docs/claude-code/hooks).
 
@@ -98,9 +102,9 @@ cc-notifier/
 ```
 
 ### Command Architecture
-- **cc-notifier init** - SessionStart hook: Captures focused window ID using Hammerspoon CLI
-- **cc-notifier notify** - Stop/Notification hooks: Sends notifications if user switched away, includes click-to-focus
-- **cc-notifier cleanup** - SessionEnd hook: Cleans up session files
+- **cc-notifier init** - SessionStart hook: Captures focused window ID (desktop) or saves placeholder (remote)
+- **cc-notifier notify** - Stop/Notification hooks: Sends local notifications (desktop) or push notifications (remote)
+- **cc-notifier cleanup** - SessionEnd hook: Cleans up session files (both modes)
 
 ### Consolidated Architecture
 - **cc_notifier.py** - Single monolithic file containing all functionality organized in clear sections:
@@ -124,8 +128,13 @@ cc-notifier/
 
 ### Runtime Dependencies
 - **Python 3.9+** - Uses only standard library modules (no external packages required)
+
+### Desktop Mode Dependencies
 - **Hammerspoon** - Required for window focusing across macOS Spaces
 - **terminal-notifier** - Required for macOS notifications with click actions
+
+### Remote Mode Dependencies
+- **Pushover account** (required) - Push notifications are the only notification method in remote mode
 
 ### Development Dependencies (optional, for development workflow)
 - **ruff** - Modern Python linting and formatting

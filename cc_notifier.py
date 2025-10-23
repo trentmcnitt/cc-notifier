@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 # Constants and configuration
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 SESSION_DIR = Path("/tmp/cc_notifier")
 CLEANUP_AGE_SECONDS = 5 * 24 * 60 * 60
 NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0
@@ -28,7 +28,8 @@ MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
-DEFAULT_IDLE_CHECK_INTERVALS = [3, 20]
+PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
+PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 
 # Debug configuration
 DEBUG = False
@@ -94,7 +95,11 @@ def main() -> None:
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID."""
     hook_data = HookData.from_stdin()
-    window_id = get_focused_window_id()
+    if is_remote_session():
+        window_id = "REMOTE"
+        debug_log("Remote session detected, skipping window capture")
+    else:
+        window_id = get_focused_window_id()
     save_window_id(hook_data.session_id, window_id)
 
 
@@ -108,10 +113,21 @@ def cmd_notify() -> None:
         return
 
     original_window_id = session_file.read_text().strip().split("\n")[0]
-    send_local_notification_if_needed(hook_data, original_window_id)
-    if os.getenv("PUSHOVER_API_TOKEN") and os.getenv("PUSHOVER_USER_KEY"):
-        debug_log("Checking for push notification")
-        check_idle_and_notify_push(hook_data, DEFAULT_IDLE_CHECK_INTERVALS)
+
+    # Local notifications only in desktop mode
+    if not is_remote_session():
+        send_local_notification_if_needed(hook_data, original_window_id)
+
+    # Push notifications if configured
+    push_config = PushConfig.from_env()
+    if push_config:
+        debug_log("Checking for push notification with idle detection")
+        intervals = (
+            PUSH_IDLE_CHECK_INTERVALS_REMOTE
+            if is_remote_session()
+            else PUSH_IDLE_CHECK_INTERVALS_DESKTOP
+        )
+        check_idle_and_notify_push(hook_data, intervals)
 
 
 @handle_command_errors("cleanup")
@@ -315,6 +331,31 @@ def log_error(error_msg: str, exception: Optional[Exception] = None) -> None:
 
 
 # ============================================================================
+# ENVIRONMENT DETECTION - Remote vs Desktop Mode
+# ============================================================================
+
+
+def is_remote_session() -> bool:
+    """Detect if running in remote SSH session."""
+    ssh_conn = os.getenv("SSH_CONNECTION")
+    ssh_client = os.getenv("SSH_CLIENT")
+    ssh_tty = os.getenv("SSH_TTY")
+    is_remote = bool(ssh_conn or ssh_client or ssh_tty)
+
+    if is_remote:
+        detected_by = []
+        if ssh_conn:
+            detected_by.append(f"SSH_CONNECTION={ssh_conn}")
+        if ssh_client:
+            detected_by.append(f"SSH_CLIENT={ssh_client}")
+        if ssh_tty:
+            detected_by.append(f"SSH_TTY={ssh_tty}")
+        debug_log(f"Remote session detected: {', '.join(detected_by)}")
+
+    return is_remote
+
+
+# ============================================================================
 # HAMMERSPOON INTEGRATION - Cross-Space Window Management
 # ============================================================================
 
@@ -461,8 +502,33 @@ class PushConfig:
         return None
 
 
-def send_pushover_notification(config: PushConfig, title: str, message: str) -> bool:
+def build_push_url(hook_data: HookData) -> Optional[str]:
+    """Build push notification URL from env var template.
+
+    Substitutes {cwd} and {session_id} placeholders with actual values.
+
+    Returns:
+        URL with placeholders substituted, or None if not configured.
+    """
+    url_template = os.getenv("CC_NOTIFIER_PUSH_URL")
+    if not url_template:
+        return None
+
+    url = url_template.format(cwd=hook_data.cwd, session_id=hook_data.session_id)
+    debug_log(f"Push URL built: {url}")
+    return url
+
+
+def send_pushover_notification(
+    config: PushConfig, title: str, message: str, url: Optional[str] = None
+) -> bool:
     """Send notification via Pushover API.
+
+    Args:
+        config: Pushover API configuration
+        title: Notification title
+        message: Notification message
+        url: Optional URL to open when notification is tapped
 
     Returns:
         True if Pushover API returned {"status":1}, False otherwise.
@@ -472,14 +538,16 @@ def send_pushover_notification(config: PushConfig, title: str, message: str) -> 
     title = title[:250] if len(title) > 250 else title
     message = message[:1024] if len(message) > 1024 else message
 
-    data = urllib.parse.urlencode(
-        {
-            "token": config.token,
-            "user": config.user,
-            "title": title,
-            "message": message,
-        }
-    ).encode("utf-8")
+    data_dict = {
+        "token": config.token,
+        "user": config.user,
+        "title": title,
+        "message": message,
+    }
+    if url:
+        data_dict["url"] = url
+
+    data = urllib.parse.urlencode(data_dict).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.pushover.net/1/messages.json",
@@ -506,7 +574,7 @@ def send_pushover_notification(config: PushConfig, title: str, message: str) -> 
         return False
 
 
-def get_idle_time() -> int:
+def get_macos_idle_time() -> int:
     """Get macOS system idle time in seconds using ioreg."""
     try:
         output = run_command(["ioreg", "-c", "IOHIDSystem"], timeout=5)
@@ -519,16 +587,41 @@ def get_idle_time() -> int:
         raise RuntimeError(f"ioreg command timed out after {e.timeout} seconds") from e
 
 
-def is_user_idle(seconds: int) -> bool:
-    """Check if user has been idle for specified duration."""
+def get_tty_idle_time() -> int:
+    """Get TTY idle time in seconds based on last read operation (user input)."""
     try:
-        return bool(get_idle_time() >= seconds)
-    except RuntimeError:
-        return False  # Assume user is active if detection fails
+        # Use TTY path captured by wrapper before backgrounding
+        # This gives us the actual terminal device (works with tmux/screen)
+        tty_path = os.getenv("CC_NOTIFIER_TTY")
+        if not tty_path:
+            raise RuntimeError("CC_NOTIFIER_TTY not set by wrapper")
+
+        debug_log(f"TTY detection: CC_NOTIFIER_TTY={tty_path!r}")
+        tty_stat = os.stat(tty_path)
+        last_read_time = tty_stat.st_atime
+        current_time = time.time()
+        idle_seconds = int(current_time - last_read_time)
+        debug_log(
+            f"TTY idle: path={tty_path}, st_atime={last_read_time:.1f}, current={current_time:.1f}, idle={idle_seconds}s"
+        )
+        return idle_seconds
+    except (OSError, ValueError) as e:
+        debug_log(f"TTY idle error: {type(e).__name__}: {e}")
+        raise RuntimeError("Unable to get TTY idle time") from e
+
+
+def get_idle_time() -> int:
+    """Get idle time in seconds, environment-aware."""
+    if is_remote_session():
+        return get_tty_idle_time()
+    return get_macos_idle_time()
 
 
 def check_idle_and_notify_push(hook_data: HookData, check_times: list[int]) -> None:
-    """Check if user is idle at specified intervals and send push notification if away."""
+    """Check if user is idle at specified intervals and send push notification if away.
+
+    Simple logic: If idle time is less than elapsed time, user was active during check period.
+    """
     push_config = PushConfig.from_env()
     if not push_config:
         return
@@ -536,18 +629,37 @@ def check_idle_and_notify_push(hook_data: HookData, check_times: list[int]) -> N
     if not check_times:
         raise ValueError("check_times cannot be empty")
 
+    mode = "remote" if is_remote_session() else "desktop"
+    debug_log(f"Push check started: mode={mode}")
+
     previous_time = 0
     for check_time in check_times:
         time.sleep(check_time - previous_time)
-        if not is_user_idle(check_time):
-            return  # User became active, exit early
+
+        try:
+            idle_time = get_idle_time()
+            # If idle time < elapsed time, user was active during check period
+            user_active = idle_time < check_time
+
+            debug_log(
+                f"Push check: elapsed={check_time}s, idle={idle_time}s, "
+                f"user_active={user_active}"
+            )
+
+            if user_active:
+                debug_log("Push check exit: User is active")
+                return
+        except RuntimeError as e:
+            debug_log(f"Push check exit: idle detection error ({e})")
+            return
+
         previous_time = check_time
 
     # User has been idle through all checks, send push notification
     title, _, message = create_notification_data(hook_data, for_push=True)
-
+    push_url = build_push_url(hook_data)
     debug_log(f"Sending push notification: '{title}'")
-    send_pushover_notification(push_config, title, message)
+    send_pushover_notification(push_config, title, message, url=push_url)
 
 
 # ============================================================================

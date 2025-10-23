@@ -8,13 +8,13 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **28 total tests** across 2 files - All tests properly accounted for and documented
+**Status**: **33 total tests** across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
 ---
 
-## test_core.py (22 tests) - Core Functionality & Essential Business Logic
+## test_core.py (27 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (8 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -45,6 +45,20 @@ Associated with: all tests in the codebase
 - `test_save_window_id_creates_file` - Session file creation with window ID and timestamp - Essential for window focus restoration functionality
 - `test_load_window_id_reads_saved_id` - Session file reading and window ID extraction - Required for determining original window to focus
 - `test_load_window_id_missing_file_raises_error` - Error handling when session file doesn't exist - Prevents undefined behavior when files are missing
+
+### TestRemoteMode (5 tests) - Remote SSH Session Testing
+- `test_remote_session_detection` - SSH environment variable detection for remote mode - Essential for determining desktop vs remote mode behavior
+- `test_remote_mode_init_uses_placeholder` - Remote mode uses placeholder window ID instead of Hammerspoon - Ensures remote mode doesn't depend on macOS tools
+- `test_remote_mode_skips_local_notification` - Remote mode skips terminal-notifier - Validates remote mode behavior without local notifications
+- `test_tty_idle_detection` - TTY access time calculation for remote idle detection - Critical for remote push notification timing
+- `test_baseline_idle_detection` - User activity detection during check periods - Ensures push notifications only sent when user truly idle
+
+### TestPushNotificationURL (5 tests) - Push Notification URL Construction & Encoding
+- `test_build_push_url_substitutes_placeholders` - Placeholder substitution for {cwd} and {session_id} - Core URL template functionality
+- `test_build_push_url_preserves_query_parameters` - Query parameters (?, &, =) preserved in custom URLs - Ensures URL schemes like blinkshell:// work correctly
+- `test_build_push_url_returns_none_when_not_configured` - Returns None when CC_NOTIFIER_PUSH_URL not set - Backward compatibility validation
+- `test_build_push_url_with_special_characters_in_path` - Special characters (spaces, hyphens) in file paths - Documents user responsibility for encoding
+- `test_push_url_survives_urlencode` - URL survives urllib.parse.urlencode() for POST body - Critical validation that URLs work through Pushover API encoding
 
 ---
 
