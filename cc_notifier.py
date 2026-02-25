@@ -34,6 +34,9 @@ PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 # Debug configuration
 DEBUG = False
 
+# Global state for threading app path to error handler
+_CURRENT_APP_PATH: Optional[str] = None
+
 
 def handle_command_errors(
     command_name: str,
@@ -93,26 +96,32 @@ def main() -> None:
 
 @handle_command_errors("init")
 def cmd_init() -> None:
-    """Initialize session by capturing focused window ID."""
+    """Initialize session by capturing focused window ID and app path."""
     hook_data = HookData.from_stdin()
     if is_remote_session():
-        window_id = "REMOTE"
+        window_id, app_path = "REMOTE", "REMOTE"
         debug_log("Remote session detected, skipping window capture")
     else:
-        window_id = get_focused_window_id()
-    save_window_id(hook_data.session_id, window_id)
+        window_id, app_path = get_focused_window_id()
+    save_window_id(hook_data.session_id, window_id, app_path)
 
 
 @handle_command_errors("notify")
 def cmd_notify() -> None:
     """Send intelligent notification if user switched away from original window."""
+    global _CURRENT_APP_PATH
     hook_data = HookData.from_stdin()
     session_file = SESSION_DIR / hook_data.session_id
 
     if check_deduplication(session_file):
         return
 
-    original_window_id = session_file.read_text().strip().split("\n")[0]
+    lines = session_file.read_text().strip().split("\n")
+    original_window_id = lines[0]
+    app_path = lines[1]
+
+    # Set global app path for error handling
+    _CURRENT_APP_PATH = app_path
 
     # Local notifications only in desktop mode
     if not is_remote_session():
@@ -190,13 +199,14 @@ def check_deduplication(session_file: Path) -> bool:
         with open(session_file, "r+") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             lines = f.read().strip().split("\n")
+            # Lines: [0]=window_id, [1]=app_name, [2]=timestamp
             if (
-                time.time() - float(lines[1])
+                time.time() - float(lines[2])
                 < NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS
             ):
                 return True
             f.seek(0)
-            f.write(f"{lines[0]}\n{time.time()}")
+            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}")
             f.truncate()
             return False
     except BlockingIOError:
@@ -207,7 +217,7 @@ def send_local_notification_if_needed(
     hook_data: HookData, original_window_id: str
 ) -> None:
     """Send local notification if user switched away from original window."""
-    current_window_id = get_focused_window_id()
+    current_window_id, _ = get_focused_window_id()
 
     if original_window_id == current_window_id:
         debug_log("User still on original window - no local notification needed")
@@ -228,13 +238,13 @@ def send_local_notification_if_needed(
     )
 
 
-def save_window_id(session_id: str, window_id: str) -> None:
-    """Save window ID to session file."""
+def save_window_id(session_id: str, window_id: str, app_path: str) -> None:
+    """Save window ID and app path to session file."""
     SESSION_DIR.mkdir(exist_ok=True)
     session_file = SESSION_DIR / session_id
-    session_file.write_text(f"{window_id}\n0")
+    session_file.write_text(f"{window_id}\n{app_path}\n0")
     debug_log(
-        f"Session initialized: window_id={window_id}, session_file={session_file}"
+        f"Session initialized: window_id={window_id}, app_path={app_path}, session_file={session_file}"
     )
 
 
@@ -305,6 +315,12 @@ def log_error(error_msg: str, exception: Optional[Exception] = None) -> None:
     """Log errors to file and send notification."""
     _write_log_entry("ERROR", error_msg, exception)
 
+    # Determine click action: focus app if available, otherwise open log
+    if _CURRENT_APP_PATH:
+        execute_action = f'open "{_CURRENT_APP_PATH}"'
+    else:
+        execute_action = f"open {LOG_FILE}"
+
     # Send error notification with fallback
     try:
         run_background_command(
@@ -317,7 +333,7 @@ def log_error(error_msg: str, exception: Optional[Exception] = None) -> None:
                 "-sound",
                 "Basso",
                 "-execute",
-                f"open {LOG_FILE}",
+                execute_action,
             ]
         )
     except Exception:
@@ -360,19 +376,24 @@ def is_remote_session() -> bool:
 # ============================================================================
 
 
-def get_focused_window_id() -> str:
-    """Get the currently focused window ID using Hammerspoon CLI."""
+def get_focused_window_id() -> tuple[str, str]:
+    """Get the currently focused window ID and app path using Hammerspoon CLI.
+
+    Returns:
+        Tuple of (window_id, app_path)
+    """
     try:
-        window_id = run_command(
+        output = run_command(
             [
                 HAMMERSPOON_CLI,
                 "-c",
-                "local w=hs.window.focusedWindow(); print(w and w:id() or 'ERROR')",
+                "local w=hs.window.focusedWindow(); if w then local app=w:application(); print(w:id()..'|'..(app and app:path() or 'UNKNOWN')) else print('ERROR') end",
             ]
         )
-        if window_id == "ERROR" or not window_id:
+        if output == "ERROR" or not output or "|" not in output:
             raise RuntimeError("Failed to get focused window ID from Hammerspoon")
-        return window_id
+        window_id, app_path = output.split("|", 1)
+        return window_id, app_path
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(
             f"Hammerspoon command timed out after {e.timeout} seconds"
@@ -387,6 +408,8 @@ def create_focus_command(window_id: str) -> list[str]:
     with setCurrentSpace(nil). The approach combines windows from current
     and other spaces, then searches for the target window ID.
 
+    If the window cannot be found or focused, shows an error notification.
+
     Args:
         window_id: The window ID to focus
 
@@ -395,6 +418,7 @@ def create_focus_command(window_id: str) -> list[str]:
     """
     # Template for complex dual-filter cross-space window focusing
     # This solves the macOS Spaces issue without using setCurrentSpace(nil) which causes hangs
+    # Shows error notification if window can't be found
     focus_script = f"""local current = require('hs.window.filter').new():setCurrentSpace(true):getWindows()
 local other = require('hs.window.filter').new():setCurrentSpace(false):getWindows()
 for _,w in pairs(other) do table.insert(current, w) end
@@ -404,7 +428,8 @@ for _,w in pairs(current) do
     require('hs.timer').usleep(300000)
     return
   end
-end"""
+end
+require('hs.notify').new({{title="cc-notifier", informativeText="Could not restore window focus. Try reopening your terminal or IDE.", soundName="Basso"}}):send()"""
     return [HAMMERSPOON_CLI, "-c", focus_script]
 
 

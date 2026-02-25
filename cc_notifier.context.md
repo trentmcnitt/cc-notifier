@@ -32,7 +32,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 4. Exit immediately
 
 ### `cc-notifier notify`
-**Trigger**: Claude Code Stop/Notification hooks (Stop: Runs when the main Claude Code agent has finished responding. Notification: Runs when Claude needs to notify the user, which is either when it needs permission to use a tool, or when the prompt has been idle for 60 seconds)
+**Trigger**: Claude Code Stop/Notification hooks (Stop: Runs when the main Claude Code agent has finished responding. Notification: Runs when Claude needs user attention - permission prompts, idle timeouts, auth events, and other notification types)
 **Purpose**: Send intelligent notifications based on environment (local macOS or remote SSH/tmux)
 **Flow**:
 1. Parse hook data from stdin JSON

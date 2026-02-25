@@ -31,7 +31,7 @@ require("hs.timer")
 # Reload: hs -c "hs.reload()"
 
 # Install cc-notifier
-git clone https://github.com/Rendann/cc-notifier.git
+git clone https://github.com/trentmcnitt/cc-notifier.git
 cd cc-notifier
 ./install.sh
 ```
@@ -69,7 +69,7 @@ Add to `~/.claude/settings.json`:
     ],
     "Notification": [
       {
-        "matcher": "*",
+        "matcher": "permission_prompt|elicitation_dialog",
         "hooks": [
           {
             "type": "command",

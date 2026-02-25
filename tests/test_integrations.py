@@ -23,9 +23,12 @@ class TestHammerspoonIntegration:
     def test_hammerspoon_cli_integration(self, mock_run_command):
         """Test Hammerspoon CLI integration with success, timeout, and error scenarios."""
         # Test 1: Success scenario
-        mock_run_command.return_value = "98765"
-        window_id = cc_notifier.get_focused_window_id()
+        mock_run_command.return_value = (
+            "98765|/System/Applications/Utilities/Terminal.app"
+        )
+        window_id, app_path = cc_notifier.get_focused_window_id()
         assert window_id == "98765"
+        assert app_path == "/System/Applications/Utilities/Terminal.app"
 
         # Verify command construction
         args = mock_run_command.call_args[0][0]

@@ -92,7 +92,10 @@ class TestCLIInterface:
             ):
                 # Setup mocks to allow init to complete
                 mock_stdin.return_value = cc_notifier.HookData(session_id="test")
-                mock_window.return_value = "12345"
+                mock_window.return_value = (
+                    "12345",
+                    "/System/Applications/Utilities/Terminal.app",
+                )
 
                 # Test actual main() call with debug flag
                 cc_notifier.main()
@@ -103,7 +106,9 @@ class TestCLIInterface:
                 # Verify the underlying command executed (init was called)
                 mock_stdin.assert_called_once()
                 mock_window.assert_called_once()
-                mock_save.assert_called_once_with("test", "12345")
+                mock_save.assert_called_once_with(
+                    "test", "12345", "/System/Applications/Utilities/Terminal.app"
+                )
 
         finally:
             # Restore original state
@@ -114,7 +119,9 @@ class TestCLIInterface:
         log_file = tmp_path / ".cc-notifier" / "cc-notifier.log"
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "test").write_text("12345\n0")
+        (session_dir / "test").write_text(
+            "12345\n/System/Applications/Utilities/Terminal.app\n0"
+        )
 
         with (
             patch.object(cc_notifier, "LOG_FILE", log_file),
@@ -177,7 +184,10 @@ class TestCoreWorkflows:
         session_dir = tmp_path / "cc_notifier"
 
         with (
-            patch("cc_notifier.get_focused_window_id", return_value="54321"),
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("54321", "/Applications/Visual Studio Code.app"),
+            ),
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
@@ -189,18 +199,25 @@ class TestCoreWorkflows:
         session_file = session_dir / "workflow123"
         assert session_file.exists()
         content = session_file.read_text().strip()
-        assert content == "54321\n0"  # window_id + initial timestamp
+        assert (
+            content == "54321\n/Applications/Visual Studio Code.app\n0"
+        )  # window_id + app_path + initial timestamp
 
     def test_notify_workflow_user_switched_sends_notification(self, tmp_path):
         """Test notify workflow when user switched: JSON input → file read → real notification."""
         test_input = {"session_id": "notify123", "cwd": "/test/project"}
-        # Create session file with new format (window_id + old timestamp)
+        # Create session file with new format (window_id + app_name + old timestamp)
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "notify123").write_text("original123\n0")
+        (session_dir / "notify123").write_text(
+            "original123\n/System/Applications/Utilities/Terminal.app\n0"
+        )
 
         with (
-            patch("cc_notifier.get_focused_window_id", return_value="different456"),
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("different456", "/Applications/Google Chrome.app"),
+            ),
             patch("subprocess.Popen") as mock_popen,
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
@@ -223,20 +240,28 @@ class TestCoreWorkflows:
         assert len(terminal_notifier_calls) >= 1
         # 3. Session file timestamp was updated
         content = (session_dir / "notify123").read_text().strip()
-        window_id, timestamp = content.split("\n")
-        assert window_id == "original123"  # Window ID unchanged
-        assert float(timestamp) > 0  # Timestamp updated
+        lines = content.split("\n")
+        assert lines[0] == "original123"  # Window ID unchanged
+        assert (
+            lines[1] == "/System/Applications/Utilities/Terminal.app"
+        )  # App path unchanged
+        assert float(lines[2]) > 0  # Timestamp updated
 
     def test_notify_workflow_user_stayed_no_notification(self, tmp_path):
         """Test notify workflow when user stayed: JSON input → file read → no notification."""
         test_input = {"session_id": "notify123"}
-        # Create session file with new format (window_id + old timestamp)
+        # Create session file with new format (window_id + app_name + old timestamp)
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "notify123").write_text("same123\n0")
+        (session_dir / "notify123").write_text(
+            "same123\n/System/Applications/Utilities/Terminal.app\n0"
+        )
 
         with (
-            patch("cc_notifier.get_focused_window_id", return_value="same123"),
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("same123", "/System/Applications/Utilities/Terminal.app"),
+            ),
             patch("subprocess.Popen") as mock_popen,
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
@@ -260,7 +285,10 @@ class TestCoreWorkflows:
         content = (session_dir / "notify123").read_text().strip()
         lines = content.split("\n")
         assert lines[0] == "same123"  # Window ID unchanged
-        assert float(lines[1]) > 0  # Timestamp updated to prevent race conditions
+        assert (
+            lines[1] == "/System/Applications/Utilities/Terminal.app"
+        )  # App path unchanged
+        assert float(lines[2]) > 0  # Timestamp updated to prevent race conditions
 
     def test_cleanup_workflow_removes_session(self, tmp_path):
         """Test complete cleanup workflow: JSON input → real age-based file cleanup."""
@@ -358,9 +386,11 @@ class TestCoreWorkflows:
 
     def test_file_locking_prevents_race_conditions(self, tmp_path):
         """Test file locking prevents race conditions between concurrent processes."""
-        # Setup session file with old timestamp
+        # Setup session file with old timestamp (3-line format)
         session_file = tmp_path / "test_session"
-        session_file.write_text("window123\n0")
+        session_file.write_text(
+            "window123\n/System/Applications/Utilities/Terminal.app\n0"
+        )
 
         # Test 1: Normal operation - should update timestamp and proceed
         with patch("fcntl.flock") as mock_flock:
@@ -371,10 +401,15 @@ class TestCoreWorkflows:
             content = session_file.read_text()
             lines = content.split("\n")
             assert lines[0] == "window123"  # Window ID unchanged
-            assert float(lines[1]) > 0  # Timestamp updated
+            assert (
+                lines[1] == "/System/Applications/Utilities/Terminal.app"
+            )  # App path unchanged
+            assert float(lines[2]) > 0  # Timestamp updated
 
         # Test 2: Lock contention - should skip gracefully
-        session_file.write_text("window123\n0")  # Reset for second test
+        session_file.write_text(
+            "window123\n/System/Applications/Utilities/Terminal.app\n0"
+        )  # Reset for second test
         with patch("fcntl.flock", side_effect=BlockingIOError) as mock_flock:
             old_content = session_file.read_text()
             result = cc_notifier.check_deduplication(session_file)
@@ -451,11 +486,18 @@ class TestSessionFileOperations:
             temp_session_dir = Path(temp_dir) / "cc_notifier"
 
             with patch.object(cc_notifier, "SESSION_DIR", temp_session_dir):
-                cc_notifier.save_window_id("test_session", "12345")
+                cc_notifier.save_window_id(
+                    "test_session",
+                    "12345",
+                    "/System/Applications/Utilities/Terminal.app",
+                )
 
             session_file = temp_session_dir / "test_session"
             assert session_file.exists()
-            assert session_file.read_text() == "12345\n0"
+            assert (
+                session_file.read_text()
+                == "12345\n/System/Applications/Utilities/Terminal.app\n0"
+            )
 
     def test_load_window_id_reads_saved_id(self):
         """Test load_window_id() reads saved window ID correctly."""
@@ -463,7 +505,7 @@ class TestSessionFileOperations:
             temp_session_dir = Path(temp_dir) / "cc_notifier"
             temp_session_dir.mkdir()
             session_file = temp_session_dir / "test_session"
-            session_file.write_text("98765\n0")
+            session_file.write_text("98765\n/Applications/Visual Studio Code.app\n0")
 
             with patch.object(cc_notifier, "SESSION_DIR", temp_session_dir):
                 window_id = cc_notifier.load_window_id("test_session")
@@ -522,18 +564,18 @@ class TestRemoteMode:
         ):
             cc_notifier.main()
 
-        # Verify placeholder window ID was saved
+        # Verify placeholder window ID and app name were saved
         session_file = session_dir / "remote123"
         assert session_file.exists()
         content = session_file.read_text().strip()
-        assert content == "REMOTE\n0"
+        assert content == "REMOTE\nREMOTE\n0"
 
     def test_remote_mode_skips_local_notification(self, tmp_path):
         """Test cmd_notify() skips local notifications in remote mode."""
         test_input = {"session_id": "remote123", "cwd": "/test/project"}
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "remote123").write_text("REMOTE\n0")
+        (session_dir / "remote123").write_text("REMOTE\nREMOTE\n0")
 
         with (
             patch("subprocess.Popen") as mock_popen,

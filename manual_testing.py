@@ -188,17 +188,122 @@ def test_local_only(debug: bool = False) -> None:
     test_notification("Claude Code 🔔 (Test)", test_hook_data, debug=debug)
 
 
+def _get_app_info() -> tuple[str, str]:
+    """Get current app path and display name."""
+    from pathlib import Path
+
+    from cc_notifier import get_focused_window_id
+
+    try:
+        _, app_path = get_focused_window_id()
+        app_display_name = Path(app_path).stem
+        print(f"✅ Detected current app: {app_display_name}")
+        print(f"   Path: {app_path}")
+        return app_path, app_display_name
+    except Exception as e:
+        print(f"❌ Failed to detect app: {e}")
+        print("💡 Using Terminal as fallback")
+        return "/System/Applications/Utilities/Terminal.app", "Terminal"
+
+
+def _test_open_command(app_path: str, app_display_name: str) -> None:
+    """Test that open command works for the app."""
+    import subprocess
+
+    print(f"\n🔍 Testing if 'open \"{app_path}\"' works...")
+    try:
+        result = subprocess.run(
+            ["open", app_path], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            print(f"✅ Successfully opened {app_display_name}")
+        else:
+            print(f"⚠️  Warning: 'open \"{app_path}\"' failed")
+            print(f"   Error: {result.stderr.strip()}")
+            print("   Continuing anyway...")
+    except Exception as e:
+        print(f"⚠️  Warning: Error testing open command: {e}")
+        print("   Continuing anyway...")
+
+
+def _send_test_notification(app_path: str, app_display_name: str) -> None:
+    """Send test notification and report results."""
+    import subprocess
+
+    from cc_notifier import TERMINAL_NOTIFIER
+
+    cmd = [
+        TERMINAL_NOTIFIER,
+        "-title",
+        "cc-notifier Test",
+        "-subtitle",
+        f"Click to focus {app_display_name}",
+        "-message",
+        "Testing application-level focus fallback",
+        "-sound",
+        "Glass",
+        "-execute",
+        f'open "{app_path}"',
+    ]
+
+    print("🔍 Executing terminal-notifier command:")
+    print(f"   Command: {' '.join(cmd)}\n")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        print(f"📡 terminal-notifier exit code: {result.returncode}")
+        if result.stdout:
+            print(f"   stdout: {result.stdout}")
+        if result.stderr:
+            print(f"   stderr: {result.stderr}")
+
+        if result.returncode == 0:
+            print("\n✅ Notification sent successfully!")
+            print(f"👆 Click the notification to test focusing {app_display_name}")
+            print("   (The notification should still be visible)")
+            print("\n💡 Using app path approach for reliable focusing")
+            print(f"   Path: {app_path}")
+        else:
+            print(f"\n❌ terminal-notifier failed with exit code {result.returncode}")
+    except subprocess.TimeoutExpired:
+        print("⏱️  terminal-notifier timed out (but notification may still be visible)")
+    except Exception as e:
+        print(f"❌ Failed to send notification: {e}")
+
+
+def test_app_focus() -> None:
+    """Test application-level focus (error notification fallback behavior)."""
+    print("🧪 Testing application-level focus...")
+    print("📱 This simulates the error notification fallback behavior\n")
+
+    app_path, app_display_name = _get_app_info()
+    _test_open_command(app_path, app_display_name)
+
+    print("\n💡 Switch to another app, then click the notification to test focus")
+    print(f"   Expected: Clicking notification will focus {app_display_name}\n")
+
+    # Wait for user to switch apps
+    print("⏱️  Sending notification in ", end="", flush=True)
+    for i in range(3, 0, -1):
+        print(f"{i}...", end="", flush=True)
+        time.sleep(1)
+    print(" NOW!\n")
+
+    _send_test_notification(app_path, app_display_name)
+
+
 def show_help() -> None:
     """Display help information."""
     print("🔧 cc-notifier Test Utility\n")
     print("Usage: python3 manual_testing.py <mode> [--debug]\n")
     print("Modes:")
-    print("  local    - Test local notifications only")
-    print("  push     - Test push notifications only (requires credentials)")
-    print("  system   - Full Claude Code hook emulation")
+    print("  local      - Test local notifications only")
+    print("  push       - Test push notifications only (requires credentials)")
+    print("  system     - Full Claude Code hook emulation")
+    print("  app-focus  - Test application-level focus fallback")
     print("\nOptions:")
     print(
-        "  --debug  - Enable debug mode with detailed logging and timestamped notifications"
+        "  --debug    - Enable debug mode with detailed logging and timestamped notifications"
     )
 
 
@@ -221,6 +326,8 @@ if __name__ == "__main__":
             test_local_only(debug=debug)
         elif mode == "system":
             test_system_mode(debug=debug)
+        elif mode == "app-focus":
+            test_app_focus()
         else:
             print(f"❌ Unknown mode: {mode}")
             show_help()
