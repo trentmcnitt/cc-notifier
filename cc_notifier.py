@@ -102,7 +102,11 @@ def cmd_init() -> None:
         window_id, app_path = "REMOTE", "REMOTE"
         debug_log("Remote session detected, skipping window capture")
     else:
-        window_id, app_path = get_focused_window_id()
+        try:
+            window_id, app_path = get_focused_window_id()
+        except Exception as e:
+            window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
+            debug_log(f"Window capture failed, continuing without: {e}")
     save_window_id(hook_data.session_id, window_id, app_path)
 
 
@@ -125,7 +129,10 @@ def cmd_notify() -> None:
 
     # Local notifications only in desktop mode
     if not is_remote_session():
-        send_local_notification_if_needed(hook_data, original_window_id)
+        try:
+            send_local_notification_if_needed(hook_data, original_window_id)
+        except Exception as e:
+            debug_log(f"Local notification failed, continuing to push: {e}")
 
     # Push notifications if configured
     push_config = PushConfig.from_env()
@@ -217,6 +224,13 @@ def send_local_notification_if_needed(
     hook_data: HookData, original_window_id: str
 ) -> None:
     """Send local notification if user switched away from original window."""
+    # Without Hammerspoon, always send notification (no window comparison possible)
+    if original_window_id == "UNAVAILABLE":
+        debug_log("Window tracking unavailable, sending notification unconditionally")
+        title, subtitle, message = create_notification_data(hook_data)
+        send_notification(title=title, subtitle=subtitle, message=message)
+        return
+
     current_window_id, _ = get_focused_window_id()
 
     if original_window_id == current_window_id:

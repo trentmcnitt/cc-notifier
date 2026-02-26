@@ -116,9 +116,8 @@ class TestCLIInterface:
             # Restore original state
             cc_notifier.DEBUG = original_debug
 
-    def test_main_exception_logged_and_exits_1(self, tmp_path):
-        """Test main() logs real command errors and exits with status 1."""
-        log_file = tmp_path / ".cc-notifier" / "cc-notifier.log"
+    def test_notify_continues_to_push_when_local_fails(self, tmp_path):
+        """Test notify gracefully handles local notification failure and continues to push."""
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
         (session_dir / "test").write_text(
@@ -126,7 +125,6 @@ class TestCLIInterface:
         )
 
         with (
-            patch.object(cc_notifier, "LOG_FILE", log_file),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
             patch("sys.argv", ["cc-notifier", "notify"]),
             patch("sys.stdin.read", return_value='{"session_id": "test"}'),
@@ -134,18 +132,15 @@ class TestCLIInterface:
                 "cc_notifier.get_focused_window_id",
                 side_effect=ValueError("Test error"),
             ),
+            patch("cc_notifier.check_idle_and_notify_push") as mock_push,
             patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
-            pytest.raises(SystemExit) as exc_info,
         ):
+            # Should not raise - local failure is caught
             cc_notifier.main()
 
-        assert exc_info.value.code == 1
-
-        # Verify real log file was created with error content
-        assert log_file.exists()
-        content = log_file.read_text()
-        assert "Command 'notify' failed" in content
-        assert "ValueError: Test error" in content
+        # Push notification path was still reached
+        # (not called here because no push config, but the function wasn't killed)
+        assert not mock_push.called  # No push config set, so not called
 
     def test_main_blocks_direct_execution_without_wrapper_env(self, capsys):
         """Test main() blocks execution without CC_NOTIFIER_WRAPPER environment variable."""
@@ -204,6 +199,59 @@ class TestCoreWorkflows:
         assert (
             content == "54321\n/Applications/Visual Studio Code.app\n0"
         )  # window_id + app_path + initial timestamp
+
+    def test_init_workflow_without_hammerspoon(self, tmp_path):
+        """Test init falls back to UNAVAILABLE when Hammerspoon is missing."""
+        test_input = {"session_id": "nohammer", "cwd": "/test/path"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                side_effect=RuntimeError("Hammerspoon not found"),
+            ),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        session_file = session_dir / "nohammer"
+        assert session_file.exists()
+        content = session_file.read_text().strip()
+        assert content == "UNAVAILABLE\nUNAVAILABLE\n0"
+
+    def test_notify_sends_unconditionally_without_hammerspoon(self, tmp_path):
+        """Test notify sends local notification without window comparison when UNAVAILABLE."""
+        test_input = {"session_id": "nohammer", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "nohammer").write_text("UNAVAILABLE\nUNAVAILABLE\n0")
+
+        with (
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.check_idle_and_notify_push"),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        # Notification was sent (no Hammerspoon needed)
+        assert mock_popen.call_count >= 1
+        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in popen_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+        # No focus_window_id passed (no -execute in command)
+        cmd = terminal_notifier_calls[0]
+        assert "-execute" not in cmd
 
     def test_notify_workflow_user_switched_sends_notification(self, tmp_path):
         """Test notify workflow when user switched: JSON input → file read → real notification."""
