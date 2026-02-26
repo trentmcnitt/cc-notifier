@@ -283,9 +283,11 @@ LOG_FILE = Path.home() / ".cc-notifier" / "cc-notifier.log"
 
 def _trim_log_if_needed() -> None:
     """Trim log file if over MAX_LOG_LINES."""
-    if not LOG_FILE.exists() or sum(1 for _ in LOG_FILE.open()) <= MAX_LOG_LINES:
+    if not LOG_FILE.exists():
         return
     lines = LOG_FILE.read_text().splitlines()
+    if len(lines) <= MAX_LOG_LINES:
+        return
     LOG_FILE.write_text("\n".join(lines[-TRIM_TO_LINES:]) + "\n")
 
 
@@ -300,9 +302,8 @@ def _write_log_entry(
     if exception:
         entry += f" - {type(exception).__name__}: {exception}"
 
-    LOG_FILE.write_text(
-        LOG_FILE.read_text() + entry + "\n" if LOG_FILE.exists() else entry + "\n"
-    )
+    with open(LOG_FILE, "a") as f:
+        f.write(entry + "\n")
 
 
 def debug_log(message: str) -> None:
@@ -459,9 +460,6 @@ def create_notification_data(
             milliseconds = int((now % 1) * 1000)
             timestamp = f"{time.strftime('%H:%M:%S', dt)}.{milliseconds:03d}"
             title = f"{title} [{timestamp}]"  # Debug mode always shows timestamp
-        else:
-            timestamp = time.strftime("%I:%M %p").lstrip("0")
-            # title = f"{title} [{timestamp}]"
     else:
         title = "Claude Code 🔔"
         if DEBUG:

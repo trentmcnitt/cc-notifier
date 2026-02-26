@@ -42,18 +42,16 @@ deadcode: ## Find dead/unused code with vulture
 
 shell-lint: ## Lint shell scripts (preserved from original)
 	@echo "🐚 Linting shell scripts..."
-	@shellcheck --severity=info --enable=all *.sh && echo "✅ Shell lint: PASSED" || (echo "❌ Shell lint: FAILED" && false)
+	@shellcheck --severity=info --enable=all *.sh mobile/*.sh && echo "✅ Shell lint: PASSED" || (echo "❌ Shell lint: FAILED" && false)
 
 check: ## Run comprehensive quality checks
 	@echo "🔍 Running comprehensive quality checks..."
 	@$(MAKE) -k format lint typecheck test deadcode shell-lint && echo "\n🎉 CHECK PASSED" || echo "\n❌ CHECK FAILED"
 
 clean: ## Clean up temporary files
-	find . -type d -name "__pycache__" -delete
+	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
-	find . -type d -name ".pytest_cache" -delete
-	find . -type d -name ".ruff_cache" -delete
-	find . -type d -name ".mypy_cache" -delete
+	rm -rf .pytest_cache .ruff_cache .mypy_cache
 	find . -name "*.log" -delete
 	find . -name "*~" -delete
 	find . -name "*.tmp" -delete

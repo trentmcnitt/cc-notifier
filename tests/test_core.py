@@ -65,9 +65,11 @@ class TestCLIInterface:
         """Test main() catches exceptions and exits with status 1."""
         with (
             patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
             patch(
                 "cc_notifier.HookData.from_stdin", side_effect=ValueError("Test error")
             ),
+            patch("cc_notifier.run_background_command"),
             pytest.raises(SystemExit) as exc_info,
         ):
             cc_notifier.main()
@@ -320,39 +322,6 @@ class TestCoreWorkflows:
 
         # Verify real end-to-end cleanup workflow behavior
         # Age-based cleanup: old file removed, new file preserved
-        assert not old_file.exists()
-        assert new_file.exists()
-
-    def test_main_cleanup_command_routing(self, tmp_path):
-        """Test that cleanup command performs real age-based cleanup."""
-        # Create temporary session directory with old and new files
-        session_dir = tmp_path / "cc_notifier"
-        session_dir.mkdir()
-
-        # Create old file (6 days ago, older than 5-day threshold)
-        old_file = session_dir / "old_session"
-        old_file.write_text("old_data\n0")
-        old_time = time.time() - (6 * 24 * 60 * 60)  # 6 days ago
-        import os
-
-        os.utime(old_file, (old_time, old_time))
-
-        # Create new file (1 day ago, within 5-day threshold)
-        new_file = session_dir / "new_session"
-        new_file.write_text("new_data\n0")
-        new_time = time.time() - (1 * 24 * 60 * 60)  # 1 day ago
-        os.utime(new_file, (new_time, new_time))
-
-        test_input = {"session_id": "test123"}
-        with (
-            patch("sys.stdin", StringIO(json.dumps(test_input))),
-            patch.object(sys, "argv", ["cc-notifier", "cleanup"]),
-            patch.object(cc_notifier, "SESSION_DIR", session_dir),
-            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
-        ):
-            cc_notifier.main()
-
-        # Verify age-based cleanup worked: old file removed, new file preserved
         assert not old_file.exists()
         assert new_file.exists()
 

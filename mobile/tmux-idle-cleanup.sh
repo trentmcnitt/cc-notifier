@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2312  # $(date) in echo is intentional
 # Automatically kill idle tmux sessions that have been inactive for too long
 #
 # PURPOSE:

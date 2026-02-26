@@ -20,7 +20,8 @@ Also enables seamless 📱 mobile development via push notifications.
 
 ```bash
 # Install dependencies
-brew install --cask hammerspoon terminal-notifier
+brew install --cask hammerspoon
+brew install terminal-notifier
 
 # Configure Hammerspoon (~/.hammerspoon/init.lua)
 require("hs.ipc")

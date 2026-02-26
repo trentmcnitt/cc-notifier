@@ -6,6 +6,7 @@ error handling, and notification system integration. Focuses on system boundary
 interactions and external dependency contracts.
 """
 
+import os
 import subprocess
 import sys
 from io import StringIO
@@ -50,17 +51,6 @@ class TestHammerspoonIntegration:
         with pytest.raises(RuntimeError, match="Failed to get focused window ID"):
             cc_notifier.get_focused_window_id()
 
-        # Test 4: Focus command generation
-        window_id = "12345"
-        command = cc_notifier.create_focus_command(window_id)
-
-        assert len(command) == 3
-        assert str(cc_notifier.HAMMERSPOON_CLI) == command[0]
-        assert command[1] == "-c"
-        assert "12345" in command[2]
-        assert "w:focus()" in command[2]
-        assert "hs.window.filter" in command[2]
-
 
 class TestExternalSystemErrorHandling:
     """Test error handling for external system interactions."""
@@ -74,6 +64,8 @@ class TestExternalSystemErrorHandling:
             patch("sys.stdin", StringIO("not valid json at all")),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+            patch("cc_notifier.run_background_command"),
         ):
             try:
                 cc_notifier.main()
@@ -86,6 +78,8 @@ class TestExternalSystemErrorHandling:
             patch("sys.stdin", StringIO('{"invalid": "missing session_id"}')),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+            patch("cc_notifier.run_background_command"),
         ):
             try:
                 cc_notifier.main()

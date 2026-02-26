@@ -10,7 +10,7 @@ if [ -z "$HOME" ]; then
     exit 1
 fi
 
-# Check Python 3.7+
+# Check Python 3.9+
 echo "✅ Checking Python version..."
 python3 -c "import sys; assert sys.version_info >= (3,9), 'Python 3.9+ required'" || {
     echo "❌ Python 3.9+ is required but not found"
@@ -45,7 +45,7 @@ if [ ${#missing_deps[@]} -ne 0 ]; then
         esac
     done
     echo
-    echo "📖 See the README for detailed setup instructions: https://github.com/Rendann/cc-notifier#requirements"
+    echo "📖 See the README for detailed setup instructions: https://github.com/trentmcnitt/cc-notifier#requirements"
     exit 1
 fi
 
@@ -82,7 +82,7 @@ echo "1. 🔧 CONFIGURE HAMMERSPOON (Required)"
 echo "2. ⚙️  ADD TO CLAUDE CODE HOOKS (Required)"
 echo
 echo "📖 See README for complete configuration details:"
-echo "   https://github.com/Rendann/cc-notifier#installation"
+echo "   https://github.com/trentmcnitt/cc-notifier#installation"
 echo
 echo "cc-notifier will not work until both steps are completed!"
 
