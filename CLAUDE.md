@@ -14,13 +14,42 @@ cc-notifier is a notification system for Claude Code hooks supporting both local
 
 **Hook Reference**: For authoritative details about hook behaviors, execution order, and available data, review the [official Claude Code hooks documentation](https://docs.claude.com/en/docs/claude-code/hooks).
 
-
 See:
 - @cc_notifier.context.md
 - @tests/tests.context.md
 - @README.md
 
+## Context Files
+
+Context files (`*.context.md`) provide AI assistants with essential architectural and behavioral context for associated code.
+
+**Location**: Co-located with the code they describe.
+
+Known context files:
+- `./cc_notifier.context.md`: `cc_notifier.py`
+- `./tests/tests.context.md`: All tests in the `tests/` directory
+
+**Rules**:
+- Read a file's associated context file before working with that file
+- Update context files when modifying associated code
+- Treat context files as the source of truth for architecture and code structure
+
+**Style**: Concise, scannable, markdown-formatted. Bullet points preferred.
+
+## Code Philosophy
+
+Write the minimum code necessary. Every line must justify its existence. This is a small notification tool, not an enterprise application.
+
+### Principles
+- **Lean and Minimal** - Resist over-architecture. Ask "could this be simpler?" before adding complexity.
+- **Quality Without Bloat** - Use modern tooling and strict standards without over-engineering.
+- **Type Safety** - Leverage Python's type system for better maintainability and IDE support.
+- **Testable Design** - Write code that can be easily tested and validated.
+- **Git Operations** - Never commit or push without explicit user consent.
+
 ## Development Commands
+
+All `make` commands require an active virtual environment: `source .venv/bin/activate`
 
 ### Setup
 - `make install` - Install development dependencies (requires virtual environment)
@@ -39,12 +68,11 @@ See:
 
 ### Comprehensive Checks
 - `make check` - Run all quality checks (format, lint, typecheck, test, deadcode, shell-lint)
-- `make check-ci` - Run quality checks with fail-fast for CI
 - `make clean` - Clean up temporary files and caches
 
 ### Development Setup
 
-**Virtual Environment Required:** Modern Python tooling requires a virtual environment:
+**Virtual Environment Required:** Development dependencies must be installed in a virtual environment:
 
 ```bash
 # Create and activate virtual environment
@@ -61,30 +89,16 @@ pre-commit install
 make check
 ```
 
-**Development Workflow:**
-```bash
-# Format and lint code
-make format && make lint
-
-# Run type checking
-make typecheck
-
-# Run tests
-make test
-
-# Complete quality check (runs all tools)
-make check
-```
-
 ## Architecture
 
-The system is implemented in Python with a modern package structure and comprehensive type annotations:
+Single-file Python implementation with type annotations:
 
 ### Package Structure
 ```
 cc-notifier/
-├── cc_notifier.py               # Consolidated monolithic script
-├── cc-notifier                  # Executable script entry point
+├── cc_notifier.py               # Main implementation (single file)
+├── cc_notifier.context.md       # Architecture context for cc_notifier.py
+├── cc-notifier                  # Bash wrapper (entry point)
 ├── manual_testing.py            # Interactive testing utility
 ├── install.sh                   # Installation script with dependency setup
 ├── uninstall.sh                 # Clean uninstallation script
@@ -92,12 +106,15 @@ cc-notifier/
 │   ├── test_core.py             # Core functionality and workflow tests
 │   ├── test_integrations.py     # External system integration tests
 │   └── tests.context.md         # Testing context documentation
+├── mobile/                      # Mobile development workflow scripts
+│   ├── README.md
+│   ├── mosh-cc-resume.sh
+│   └── tmux-idle-cleanup.sh
 ├── pyproject.toml               # Modern Python project configuration
 ├── Makefile                     # Development workflow commands
 ├── .pre-commit-config.yaml      # Quality enforcement hooks
 ├── README.md                    # Project documentation
 ├── CLAUDE.md                    # Claude Code development guidance
-├── streamlining_plan.md         # Development planning document
 └── .gitignore                   # Git ignore patterns
 ```
 
@@ -106,23 +123,15 @@ cc-notifier/
 - **cc-notifier notify** - Stop/Notification hooks: Sends local notifications (desktop) or push notifications (remote)
 - **cc-notifier cleanup** - SessionEnd hook: Cleans up session files (both modes)
 
-### Consolidated Architecture
-- **cc_notifier.py** - Single monolithic file containing all functionality organized in clear sections:
-  - Core utilities and session management (HookData dataclass, file operations)
-  - Hammerspoon CLI integration for cross-space window management
-  - Notification generation and terminal-notifier integration
-  - CLI command dispatch and main entry point
-
-
 ### Key Components
 
-- **Command dispatcher**: `cc-notifier` main command with subcommands (init, notify, cleanup)
-- **Installation**: Single directory location (`~/.cc-notifier/`)
-- **Session tracking**: Window IDs stored in `/tmp/cc_notifier/{session_id}`
-- **Window management**: Uses Hammerspoon CLI for cross-space window focusing via `hs.window.filter`
-- **Notifications**: terminal-notifier with `-execute` parameter for click-to-focus functionality
-- **Intelligence**: Only notifies if user actually switched away from original window
-- **Self-contained**: All files in single directory, no PATH dependencies
+- **cc_notifier.py** - Single-file implementation: core utilities, session management (HookData dataclass), Hammerspoon integration, notification system, CLI dispatch
+- **cc-notifier** - Bash wrapper with subcommands (init, notify, cleanup)
+- **Installation** - Single directory (`~/.cc-notifier/`), self-contained, no PATH dependencies
+- **Session tracking** - Window ID, app path, and timestamp stored in `/tmp/cc_notifier/{session_id}`
+- **Window management** - Hammerspoon CLI (`hs -c`) for cross-space window focusing via `hs.window.filter`
+- **Notifications** - terminal-notifier with `-execute` parameter for click-to-focus functionality
+- **Intelligence** - Only notifies if user actually switched away from original window
 
 ## Dependencies
 
@@ -143,7 +152,7 @@ cc-notifier/
 - **vulture** - Dead code detection
 - **pre-commit** - Git hook management
 
-Development dependencies are defined in `pyproject.toml` and can be installed with `make install` in a virtual environment.
+Development dependencies are defined in `pyproject.toml`. Install with `make install` in an active virtual environment.
 
 ## Testing Framework
 
@@ -151,20 +160,16 @@ The project uses an optimized, behavior-focused testing approach:
 
 - **pytest** - Modern Python testing framework
 - **Behavior-focused tests** - Tests validate user-visible behaviors rather than implementation details
-- **2-file organization** - `test_core.py` (core functionality tests) for essential behaviors, `test_integrations.py` (system integration tests) for external boundaries
-- **Right-sized testing** - Targeted behavior-focused tests with target 1.5:1 to 2:1 test-to-code ratio focusing on essential functionality
+- **2-file organization**:
+  - `test_core.py` - Core functionality and essential behaviors
+  - `test_integrations.py` - External system boundaries and integrations
 - **Manual Testing** - Interactive testing utility (`manual_testing.py`) for validating notification functionality
 - **Type checking** - All modules have comprehensive type annotations validated by mypy
 - **Quality gates** - Pre-commit hooks enforce code quality standards
 
-**Testing Philosophy**: Quality without bloat - test complexity matches project complexity. Every test must catch a bug that affects user experience. Tests focus on essential user-facing functionality and system integration contracts rather than internal implementation details.
-
-**Testing Target**: Target 1.5:1 to 2:1 ratio for testing code to functional code. This provides comprehensive validation while enabling rapid development and refactoring without coverage bureaucracy.
-
-**Critical: Tests must fail when production logic changes.** All tests validate real functionality and catch actual bugs. Tests enable refactoring rather than hindering it by focusing on behaviors, not implementation details.
+**Testing Philosophy**: Quality without bloat. Target 1.5:1 to 2:1 test-to-code ratio. Every test must catch a bug that affects user experience and must fail when production logic changes. Tests focus on behaviors, not implementation details.
 
 ### Running Tests
-Prepend all commands with `source .venv/bin/activate` in order to use the virtual environment.
 ```bash
 # Run all tests
 make test
@@ -181,17 +186,16 @@ python3 manual_testing.py system
 
 ## Code Quality Standards
 
-The project enforces strict quality standards suitable for AI-generated code:
+The project enforces strict quality standards:
 
 - **Type Safety** - Full mypy type checking with strict configuration
-- **Modern Linting** - Ruff with AI-focused rules for clean, maintainable code
-- **Security Scanning** - Bandit for vulnerability detection
+- **Modern Linting** - Ruff for linting and formatting
+- **Security Scanning** - Bandit for vulnerability detection (pre-commit hook)
 - **Dead Code Detection** - Vulture to catch unused code
 - **Consistent Formatting** - Ruff formatter for consistent code style
 - **Pre-commit Hooks** - Automatic quality enforcement on every commit
 
 All configuration is centralized in `pyproject.toml` following modern Python standards.
-- Even though this is a simple project, it maintains professional quality standards and implements configurations aimed to help with AI-assisted development.
 
 ## Hammerspoon Troubleshooting
 
@@ -214,6 +218,7 @@ end
 for i = math.max(1, #lines-10), #lines do
     print(lines[i])
 end"
+```
 
 ### Debugging Workflow
 
@@ -222,46 +227,8 @@ end"
 3. **Check console**: View logs with timestamps to correlate errors
 4. **Reload if needed**: `hs -c "hs.reload()"` if Hammerspoon gets stuck
 
-
 Check out [Hammerspoon docs](https://www.hammerspoon.org/docs/) for more commands and troubleshooting tips, like [hs.logger](https://www.hammerspoon.org/docs/hs.logger.html)
-
-## Code Philosophy
-
-**Balance simplicity with quality - this is a simple notification tool with professional standards.**
-
-**CRITICAL: Write super lean, minimal code. This is not an enterprise application.**
-
-### Core Principles
-- **Lean and Minimal First** - Write the absolute minimum code necessary. Every line must justify its existence.
-- **Simplicity Over Everything** - Keep functions small and focused, ask "Could this be simpler?" before adding complexity
-- **No Enterprise Bloat** - This is a small, simple project. Resist the urge to over-architect or add unnecessary abstractions.
-- **Quality Without Bloat** - Use modern tooling and strict standards without over-engineering
-- **Type Safety** - Leverage Python's type system for better maintainability and IDE support
-- **Testable Design** - Write code that can be easily tested and validated
-- **Professional Standards** - Follow Python best practices even for simple tools
-
-### Development Guidelines
-- **Git Operations** - Never commit or push changes without explicit user consent. Always ask before running `git commit` or `git push` commands.
-
 
 ## Installation
 
 Run `./install.sh` to set up dependencies and generate Claude Code hook configuration. The installer provides JSON configuration to add to `~/.claude/settings.json`.
-
-# Context Files (denoted by the .context.md file extension)
-
-Context Files (*.context.md) provide AI assistants with helpful, and contain information that aids understanding of the repository.
-
-**Location**: Scattered throughout the repository, and should be located in the same directory as the code/documentation they describe.
-
-Known Context Files (and their associated files):
-- `./cc_notifier.context.md`: `cc_notifier.py`
-- `./tests/tests.context.md`: All tests in the `tests/` directory
-
-**Usage**: 
-- Treat these files as the source of truth over code structure (or architectural) inference
-- Content varies and can cover process flows, cataloging of functions/classes, detailed explanations of complex logic, and any other information that aids understanding
-- IF A FILE HAS AN ASSOCIATED CONTEXT FILE, YOU MUST READ THAT FILE BEFORE WORKING WITH THE ASSOCIATED FILE
-- Whenever working with a file that has an associated `.context.md`, read that file first to understand the context
-
-**Style**: Freeform, meant to be as concise as possible, while still being optimally helpful. Typically uses things like bullet points and other formatting to keep things scannable, concise, and easy to digest. Uses markdown formatting.

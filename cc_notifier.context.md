@@ -1,18 +1,18 @@
 # cc_notifier.py Reference
 
-Associated with: `cc-notifier.py` and `cc-notifier` bash wrapper
+Associated with: `cc_notifier.py` and `cc-notifier` bash wrapper
 
 Primarily a high-level architectural reference, not a detailed implementation guide. It should be kept in sync with the actual codebase.
 
 ## Overview
-`cc-notifier.py` is meant to be run as a background process via the `cc-notifier` bash wrapper, which in turn is called by Claude Code hooks. It provides intelligent notifications for both local macOS (desktop mode) and remote SSH (remote mode) environments.
+`cc_notifier.py` is meant to be run as a background process via the `cc-notifier` bash wrapper, which in turn is called by Claude Code hooks. It provides intelligent notifications for both local macOS (desktop mode) and remote SSH (remote mode) environments.
 
 **Desktop Mode**: macOS notifications with click-to-focus and optional push notifications
 **Remote Mode**: Push notifications only (auto-detected via SSH environment variables)
 
 ## Key Components
 
-- **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID and timestamp
+- **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, and timestamp
 - **Window Management**: Hammerspoon CLI for cross-space window focusing
 - **Local Notifications**: terminal-notifier with `-execute` parameter for click actions
 - **Push Notifications**: Pushover API integration
@@ -28,7 +28,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 1. Parse session data from stdin JSON
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
-3. Save window ID + timestamp to `/tmp/cc_notifier/{session_id}`
+3. Save window ID, app path, and timestamp to `/tmp/cc_notifier/{session_id}`
 4. Exit immediately
 
 ### `cc-notifier notify`
@@ -37,7 +37,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 **Flow**:
 1. Parse hook data from stdin JSON
 2. Load original window ID from session file
-3. Check deduplication threshold (prevent spam within X seconds)
+3. Check deduplication threshold (prevent spam within 2 seconds)
 4. **Desktop Mode Only**:
    - Get current focused window ID via Hammerspoon CLI
    - Compare original vs current window ID
@@ -47,8 +47,8 @@ Flows are in the order they are executed, and are performed synchronously, unles
 5. **Remote Mode Only**: Skip local notifications entirely
 6. **Push Notifications** (if push credentials exist):
    - Check idle status using ioreg (desktop) or TTY st_atime (remote)
-   - Progressive interval checks [3s, 20s]
-   - Baseline comparison: captures idle time at start, detects if user provided input (idle time decreased)
+   - Progressive interval checks: desktop [3s, 20s], remote [4s]
+   - At each check: if idle time < elapsed time, user was active during check period
    - Exit early if user becomes active
    - Send push via Pushover if idle through all checks
 7. Exit
@@ -58,8 +58,8 @@ Flows are in the order they are executed, and are performed synchronously, unles
 **Purpose**: Clean up session files after Claude Code session ends
 **Flow**:
 1. Parse session data from stdin JSON
-2. ~~Remove file associated with session id~~ (currently disabled due to Claude Code bug #7911)
-3. Perform age-based cleanup of old session files (>X days old)
+2. ~~Remove file associated with session ID~~ (currently disabled due to Claude Code bug #7911)
+3. Perform age-based cleanup of old session files (>5 days old)
 4. Exit
 
 ### `cc-notifier --version` / `cc-notifier -v`
@@ -76,19 +76,16 @@ Flows are in the order they are executed, and are performed synchronously, unles
 
 **Hook Data Structure**
 
-All cc-notifier commands receive JSON data via stdin from Claude Code hooks containing:
+All cc-notifier commands receive JSON data via stdin from Claude Code hooks. HookData parses and filters to these fields:
 ```json
 {
-  // Common fields (always present)
-  "session_id": "string",
-  "transcript_path": "string",  // Path to conversation JSON
-  "cwd": "string",              // Current working directory when hook is invoked
-
-  // Event-specific fields
-  "hook_event_name": "string",
-  // ... additional fields depending on hook type
+  "session_id": "string",       // Required, always present
+  "cwd": "string",              // Current working directory (default: "")
+  "hook_event_name": "string",  // Event type (default: "Stop")
+  "message": "string"           // Notification message, e.g. permission prompts (default: "")
 }
 ```
+Note: Claude Code sends additional fields (e.g., `transcript_path`) that are filtered out by HookData.
 
 **Session Files**
 - Stored in `/tmp/cc_notifier/`
@@ -96,6 +93,7 @@ All cc-notifier commands receive JSON data via stdin from Claude Code hooks cont
 - Format (replace <> with actual values):
   ```
   <window_id>
+  <app_path>
   <unix_timestamp>
   ```
 
