@@ -32,6 +32,7 @@ HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
 TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
 PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
 PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
+PUSH_IDLE_CHECK_INTERVALS_ATTACHED = [3, 20]
 
 # Debug configuration
 DEBUG = False
@@ -109,7 +110,8 @@ def cmd_init() -> None:
         except (RuntimeError, OSError) as e:
             window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
             debug_log(f"Window capture failed, continuing without: {e}")
-    save_window_id(hook_data.session_id, window_id, app_path)
+    tmux_session_id = get_tmux_session_id() or ""
+    save_window_id(hook_data.session_id, window_id, app_path, tmux_session_id)
 
 
 @handle_command_errors("notify")
@@ -125,6 +127,7 @@ def cmd_notify() -> None:
     lines = session_file.read_text().strip().split("\n")
     original_window_id = lines[0]
     app_path = lines[1]
+    tmux_session_id = lines[3] if len(lines) > 3 else ""
 
     # Set global app path for error handling
     _CURRENT_APP_PATH = app_path
@@ -132,19 +135,25 @@ def cmd_notify() -> None:
     # Local notifications only in desktop mode
     if not is_remote_session():
         try:
-            send_local_notification_if_needed(hook_data, original_window_id)
+            send_local_notification_if_needed(
+                hook_data, original_window_id, tmux_session_id
+            )
         except (RuntimeError, OSError) as e:
             log_error("Local notification failed, continuing to push", e)
 
     # Push notifications if configured
     push_config = PushConfig.from_env()
     if push_config:
-        debug_log("Checking for push notification with idle detection")
-        intervals = (
-            PUSH_IDLE_CHECK_INTERVALS_REMOTE
-            if is_remote_session()
-            else PUSH_IDLE_CHECK_INTERVALS_DESKTOP
-        )
+        if tmux_session_id and is_tmux_session_attached(tmux_session_id):
+            debug_log(
+                f"tmux session {tmux_session_id} attached - using extended idle check"
+            )
+            intervals = PUSH_IDLE_CHECK_INTERVALS_ATTACHED
+        elif is_remote_session():
+            intervals = PUSH_IDLE_CHECK_INTERVALS_REMOTE
+        else:
+            intervals = PUSH_IDLE_CHECK_INTERVALS_DESKTOP
+        debug_log(f"Push idle check intervals: {intervals}")
         check_idle_and_notify_push(hook_data, intervals)
 
 
@@ -208,14 +217,15 @@ def check_deduplication(session_file: Path) -> bool:
         with open(session_file, "r+") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             lines = f.read().strip().split("\n")
-            # Lines: [0]=window_id, [1]=app_name, [2]=timestamp
+            # Lines: [0]=window_id, [1]=app_name, [2]=timestamp, [3]=tmux_session_id (optional)
             if (
                 time.time() - float(lines[2])
                 < NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS
             ):
                 return True
+            tmux_id = lines[3] if len(lines) > 3 else ""
             f.seek(0)
-            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}")
+            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}\n{tmux_id}")
             f.truncate()
             return False
     except BlockingIOError:
@@ -223,11 +233,18 @@ def check_deduplication(session_file: Path) -> bool:
 
 
 def send_local_notification_if_needed(
-    hook_data: HookData, original_window_id: str
+    hook_data: HookData,
+    original_window_id: str,
+    tmux_session_id: str = "",
 ) -> None:
     """Send local notification if user switched away from original window."""
-    # Without Hammerspoon, always send notification (no window comparison possible)
+    # Without Hammerspoon, check tmux session before sending
     if original_window_id == "UNAVAILABLE":
+        if tmux_session_id and is_tmux_session_attached(tmux_session_id):
+            debug_log(
+                f"Window tracking unavailable but tmux session {tmux_session_id} is attached - suppressing notification"
+            )
+            return
         debug_log("Window tracking unavailable, sending notification unconditionally")
         title, subtitle, message = create_notification_data(hook_data)
         send_notification(title=title, subtitle=subtitle, message=message)
@@ -236,8 +253,14 @@ def send_local_notification_if_needed(
     current_window_id, _ = get_focused_window_id()
 
     if original_window_id == current_window_id:
-        debug_log("User still on original window - no local notification needed")
-        return
+        # Same window, but check if user switched tmux sessions within it
+        if tmux_session_id and not is_tmux_session_attached(tmux_session_id):
+            debug_log(
+                f"Same window but tmux session {tmux_session_id} detached - user switched tmux sessions"
+            )
+        else:
+            debug_log("User still on original window - no local notification needed")
+            return
 
     # User switched away - send local notification
     title, subtitle, message = create_notification_data(hook_data)
@@ -254,13 +277,18 @@ def send_local_notification_if_needed(
     )
 
 
-def save_window_id(session_id: str, window_id: str, app_path: str) -> None:
-    """Save window ID and app path to session file."""
+def save_window_id(
+    session_id: str,
+    window_id: str,
+    app_path: str,
+    tmux_session_id: str = "",
+) -> None:
+    """Save window ID, app path, and tmux session ID to session file."""
     SESSION_DIR.mkdir(exist_ok=True)
     session_file = SESSION_DIR / session_id
-    session_file.write_text(f"{window_id}\n{app_path}\n0")
+    session_file.write_text(f"{window_id}\n{app_path}\n0\n{tmux_session_id}")
     debug_log(
-        f"Session initialized: window_id={window_id}, app_path={app_path}, session_file={session_file}"
+        f"Session initialized: window_id={window_id}, app_path={app_path}, tmux={tmux_session_id}, session_file={session_file}"
     )
 
 
@@ -386,6 +414,56 @@ def is_remote_session() -> bool:
         debug_log(f"Remote session detected: {', '.join(detected_by)}")
 
     return is_remote
+
+
+def get_tmux_session_id() -> Optional[str]:
+    """Get the current tmux session ID (e.g. '$20'), or None if not in tmux."""
+    try:
+        result = subprocess.run(
+            ["tmux", "display-message", "-p", "#{session_id}"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            session_id = result.stdout.strip()
+            debug_log(f"tmux session ID: {session_id}")
+            return session_id
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def is_tmux_session_attached(session_id: str) -> bool:
+    """Check if a tmux session is currently attached (has active clients).
+
+    Args:
+        session_id: tmux session ID (e.g. '$20')
+
+    Returns:
+        True if attached count > 0, False otherwise.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "tmux",
+                "list-sessions",
+                "-f",
+                f"#{{==:#{{session_id}},{session_id}}}",
+                "-F",
+                "#{session_attached}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            attached_count = int(result.stdout.strip())
+            debug_log(f"tmux session {session_id} attached count: {attached_count}")
+            return attached_count > 0
+        return False
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        return False
 
 
 # ============================================================================

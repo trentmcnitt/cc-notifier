@@ -89,6 +89,7 @@ class TestCLIInterface:
                 patch.object(sys, "argv", ["cc-notifier", "--debug", "init"]),
                 patch("cc_notifier.HookData.from_stdin") as mock_stdin,
                 patch("cc_notifier.get_focused_window_id") as mock_window,
+                patch("cc_notifier.get_tmux_session_id", return_value=None),
                 patch("cc_notifier.save_window_id") as mock_save,
                 patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
             ):
@@ -109,7 +110,7 @@ class TestCLIInterface:
                 mock_stdin.assert_called_once()
                 mock_window.assert_called_once()
                 mock_save.assert_called_once_with(
-                    "test", "12345", "/System/Applications/Utilities/Terminal.app"
+                    "test", "12345", "/System/Applications/Utilities/Terminal.app", ""
                 )
 
         finally:
@@ -143,7 +144,7 @@ class TestCLIInterface:
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
         (session_dir / "test").write_text(
-            "12345\n/System/Applications/Utilities/Terminal.app\n0"
+            "12345\n/System/Applications/Utilities/Terminal.app\n0\n"
         )
 
         with (
@@ -166,6 +167,8 @@ class TestCLIInterface:
 
         # Push notification path was reached despite local failure
         mock_push.assert_called_once()
+
+
 
     def test_main_blocks_direct_execution_without_wrapper_env(self, capsys):
         """Test main() blocks execution without CC_NOTIFIER_WRAPPER environment variable."""
@@ -210,6 +213,7 @@ class TestCoreWorkflows:
                 "cc_notifier.get_focused_window_id",
                 return_value=("54321", "/Applications/Visual Studio Code.app"),
             ),
+            patch("cc_notifier.get_tmux_session_id", return_value="$20"),
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
@@ -220,13 +224,14 @@ class TestCoreWorkflows:
         # Verify real end-to-end workflow behavior
         session_file = session_dir / "workflow123"
         assert session_file.exists()
-        content = session_file.read_text().strip()
-        assert (
-            content == "54321\n/Applications/Visual Studio Code.app\n0"
-        )  # window_id + app_path + initial timestamp
+        lines = session_file.read_text().strip().split("\n")
+        assert lines[0] == "54321"
+        assert lines[1] == "/Applications/Visual Studio Code.app"
+        assert lines[2] == "0"
+        assert lines[3] == "$20"  # tmux session ID captured
 
     def test_init_workflow_without_hammerspoon(self, tmp_path):
-        """Test init falls back to UNAVAILABLE when Hammerspoon is missing."""
+        """Test init falls back to UNAVAILABLE but still captures tmux session ID."""
         test_input = {"session_id": "nohammer", "cwd": "/test/path"}
         session_dir = tmp_path / "cc_notifier"
 
@@ -235,6 +240,7 @@ class TestCoreWorkflows:
                 "cc_notifier.get_focused_window_id",
                 side_effect=RuntimeError("Hammerspoon not found"),
             ),
+            patch("cc_notifier.get_tmux_session_id", return_value="$5"),
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
@@ -244,32 +250,57 @@ class TestCoreWorkflows:
 
         session_file = session_dir / "nohammer"
         assert session_file.exists()
-        content = session_file.read_text().strip()
-        assert content == "UNAVAILABLE\nUNAVAILABLE\n0"
+        lines = session_file.read_text().strip().split("\n")
+        assert lines[0] == "UNAVAILABLE"
+        assert lines[1] == "UNAVAILABLE"
+        assert lines[2] == "0"
+        assert lines[3] == "$5"  # tmux session ID still captured
 
-    def test_notify_sends_unconditionally_without_hammerspoon(self, tmp_path):
-        """Test notify sends local notification without window comparison when UNAVAILABLE."""
+    def test_notify_suppressed_when_tmux_attached_without_hammerspoon(self, tmp_path):
+        """Test notify suppresses local notification when tmux session is attached."""
         test_input = {"session_id": "nohammer", "cwd": "/test/project"}
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "nohammer").write_text("UNAVAILABLE\nUNAVAILABLE\n0")
+        (session_dir / "nohammer").write_text("UNAVAILABLE\nUNAVAILABLE\n0\n$20")
 
         with (
-            patch("subprocess.Popen") as mock_popen,
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("cc_notifier.is_tmux_session_attached", return_value=True),
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
-            patch("cc_notifier.check_idle_and_notify_push"),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
             patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
-        # Notification was sent (no Hammerspoon needed)
-        assert mock_popen.call_count >= 1
-        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        # No terminal-notifier call (notification suppressed)
+        mock_bg.assert_not_called()
+
+    def test_notify_sent_when_tmux_detached_without_hammerspoon(self, tmp_path):
+        """Test notify sends local notification when tmux session is detached."""
+        test_input = {"session_id": "nohammer", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "nohammer").write_text("UNAVAILABLE\nUNAVAILABLE\n0\n$20")
+
+        with (
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("cc_notifier.is_tmux_session_attached", return_value=False),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        # Notification was sent (tmux detached, no window comparison)
+        assert mock_bg.call_count >= 1
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
         terminal_notifier_calls = [
             cmd
-            for cmd in popen_calls
+            for cmd in bg_calls
             if any("terminal-notifier" in str(arg) for arg in cmd)
         ]
         assert len(terminal_notifier_calls) >= 1
@@ -278,14 +309,41 @@ class TestCoreWorkflows:
         cmd = terminal_notifier_calls[0]
         assert "-execute" not in cmd
 
+    def test_notify_sent_without_hammerspoon_or_tmux(self, tmp_path):
+        """Test notify sends local notification unconditionally when no tmux session."""
+        test_input = {"session_id": "nohammer", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "nohammer").write_text("UNAVAILABLE\nUNAVAILABLE\n0\n")
+
+        with (
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        # Notification was sent (no tmux, no window comparison)
+        assert mock_bg.call_count >= 1
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in bg_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
     def test_notify_workflow_user_switched_sends_notification(self, tmp_path):
         """Test notify workflow when user switched: JSON input → file read → real notification."""
         test_input = {"session_id": "notify123", "cwd": "/test/project"}
-        # Create session file with new format (window_id + app_name + old timestamp)
+        # Create session file (window_id + app_name + old timestamp + tmux_session_id)
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
         (session_dir / "notify123").write_text(
-            "original123\n/System/Applications/Utilities/Terminal.app\n0"
+            "original123\n/System/Applications/Utilities/Terminal.app\n0\n"
         )
 
         env = {"CC_NOTIFIER_WRAPPER": "1"}
@@ -297,23 +355,23 @@ class TestCoreWorkflows:
                 "cc_notifier.get_focused_window_id",
                 return_value=("different456", "/Applications/Google Chrome.app"),
             ),
-            patch("subprocess.Popen") as mock_popen,
+            patch("cc_notifier.run_background_command") as mock_bg,
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
-            patch("cc_notifier.check_idle_and_notify_push"),  # Mock push notifications
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
             patch.dict(os.environ, env),
         ):
             cc_notifier.main()
 
         # Verify real end-to-end workflow behavior
         # 1. Notification subprocess was started
-        assert mock_popen.call_count >= 1
+        assert mock_bg.call_count >= 1
         # 2. Verify terminal-notifier command was called
-        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
         terminal_notifier_calls = [
             cmd
-            for cmd in popen_calls
+            for cmd in bg_calls
             if any("terminal-notifier" in str(arg) for arg in cmd)
         ]
         assert len(terminal_notifier_calls) >= 1
@@ -329,11 +387,11 @@ class TestCoreWorkflows:
     def test_notify_workflow_user_stayed_no_notification(self, tmp_path):
         """Test notify workflow when user stayed: JSON input → file read → no notification."""
         test_input = {"session_id": "notify123"}
-        # Create session file with new format (window_id + app_name + old timestamp)
+        # Create session file (window_id + app_name + old timestamp + tmux_session_id)
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
         (session_dir / "notify123").write_text(
-            "same123\n/System/Applications/Utilities/Terminal.app\n0"
+            "same123\n/System/Applications/Utilities/Terminal.app\n0\n"
         )
 
         with (
@@ -341,22 +399,22 @@ class TestCoreWorkflows:
                 "cc_notifier.get_focused_window_id",
                 return_value=("same123", "/System/Applications/Utilities/Terminal.app"),
             ),
-            patch("subprocess.Popen") as mock_popen,
+            patch("cc_notifier.run_background_command") as mock_bg,
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
-            patch("cc_notifier.check_idle_and_notify_push"),  # Mock push notifications
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
             patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
         ):
             cc_notifier.main()
 
         # Verify real end-to-end workflow behavior
         # 1. No terminal-notifier subprocess started (user stayed on same window)
-        if mock_popen.called:
-            popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        if mock_bg.called:
+            bg_calls = [call[0][0] for call in mock_bg.call_args_list]
             terminal_notifier_calls = [
                 cmd
-                for cmd in popen_calls
+                for cmd in bg_calls
                 if any("terminal-notifier" in str(arg) for arg in cmd)
             ]
             assert len(terminal_notifier_calls) == 0
@@ -368,6 +426,40 @@ class TestCoreWorkflows:
             lines[1] == "/System/Applications/Utilities/Terminal.app"
         )  # App path unchanged
         assert float(lines[2]) > 0  # Timestamp updated to prevent race conditions
+
+    def test_notify_sent_when_same_window_but_tmux_detached(self, tmp_path):
+        """Test notify sends notification when same window but tmux session is detached."""
+        test_input = {"session_id": "notify123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "notify123").write_text(
+            "same123\n/System/Applications/Utilities/Terminal.app\n0\n$20"
+        )
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("same123", "/System/Applications/Utilities/Terminal.app"),
+            ),
+            patch("cc_notifier.is_tmux_session_attached", return_value=False),
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        # Notification was sent (user switched tmux sessions within same window)
+        assert mock_bg.call_count >= 1
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in bg_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
 
     def test_cleanup_workflow_removes_session(self, tmp_path):
         """Test complete cleanup workflow: JSON input → real age-based file cleanup."""
@@ -432,18 +524,18 @@ class TestCoreWorkflows:
 
     def test_file_locking_prevents_race_conditions(self, tmp_path):
         """Test file locking prevents race conditions between concurrent processes."""
-        # Setup session file with old timestamp (3-line format)
+        # Setup session file with 4-line format
         session_file = tmp_path / "test_session"
         session_file.write_text(
-            "window123\n/System/Applications/Utilities/Terminal.app\n0"
+            "window123\n/System/Applications/Utilities/Terminal.app\n0\n$20"
         )
 
-        # Test 1: Normal operation - should update timestamp and proceed
+        # Test 1: Normal operation - should update timestamp and preserve tmux ID
         with patch("fcntl.flock") as mock_flock:
             result = cc_notifier.check_deduplication(session_file)
             assert not result  # Should proceed with notification
             assert mock_flock.called  # Lock was attempted
-            # Verify timestamp was updated atomically
+            # Verify timestamp was updated and tmux ID preserved
             content = session_file.read_text()
             lines = content.split("\n")
             assert lines[0] == "window123"  # Window ID unchanged
@@ -451,10 +543,11 @@ class TestCoreWorkflows:
                 lines[1] == "/System/Applications/Utilities/Terminal.app"
             )  # App path unchanged
             assert float(lines[2]) > 0  # Timestamp updated
+            assert lines[3] == "$20"  # tmux session ID preserved
 
         # Test 2: Lock contention - should skip gracefully
         session_file.write_text(
-            "window123\n/System/Applications/Utilities/Terminal.app\n0"
+            "window123\n/System/Applications/Utilities/Terminal.app\n0\n$20"
         )  # Reset for second test
         with patch("fcntl.flock", side_effect=BlockingIOError) as mock_flock:
             old_content = session_file.read_text()
@@ -463,6 +556,48 @@ class TestCoreWorkflows:
             assert mock_flock.called  # Lock was attempted
             # Verify file unchanged when lock fails
             assert session_file.read_text() == old_content
+
+    def test_push_uses_extended_intervals_when_tmux_attached_desktop(self, tmp_path):
+        """Test desktop mode also uses extended idle check when tmux is attached."""
+        test_input = {"session_id": "desk123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "desk123").write_text("12345\n/app/path\n0\n$10")
+
+        with (
+            patch("cc_notifier.is_tmux_session_attached", return_value=True),
+            patch(
+                "cc_notifier.get_focused_window_id", return_value=("12345", "/app/path")
+            ),
+            patch("cc_notifier.check_idle_and_notify_push") as mock_idle_push,
+            patch("cc_notifier.send_notification"),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_WRAPPER": "1",
+                    "PUSHOVER_API_TOKEN": "test_token",
+                    "PUSHOVER_USER_KEY": "test_user",
+                },
+                clear=False,
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "SSH_CONNECTION": "",
+                    "SSH_CLIENT": "",
+                    "SSH_TTY": "",
+                },
+            ),
+        ):
+            cc_notifier.main()
+
+        mock_idle_push.assert_called_once()
+        call_args = mock_idle_push.call_args
+        intervals = call_args[0][1]
+        assert intervals == cc_notifier.PUSH_IDLE_CHECK_INTERVALS_ATTACHED
 
 
 class TestDataParsing:
@@ -527,7 +662,7 @@ class TestSessionFileOperations:
     """Test session file creation, reading, and cleanup."""
 
     def test_save_window_id_creates_file(self):
-        """Test save_window_id() creates directory and saves ID."""
+        """Test save_window_id() creates directory and saves ID with tmux session."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_session_dir = Path(temp_dir) / "cc_notifier"
 
@@ -536,13 +671,14 @@ class TestSessionFileOperations:
                     "test_session",
                     "12345",
                     "/System/Applications/Utilities/Terminal.app",
+                    "$20",
                 )
 
             session_file = temp_session_dir / "test_session"
             assert session_file.exists()
             assert (
                 session_file.read_text()
-                == "12345\n/System/Applications/Utilities/Terminal.app\n0"
+                == "12345\n/System/Applications/Utilities/Terminal.app\n0\n$20"
             )
 
     def test_load_window_id_reads_saved_id(self):
@@ -551,7 +687,9 @@ class TestSessionFileOperations:
             temp_session_dir = Path(temp_dir) / "cc_notifier"
             temp_session_dir.mkdir()
             session_file = temp_session_dir / "test_session"
-            session_file.write_text("98765\n/Applications/Visual Studio Code.app\n0")
+            session_file.write_text(
+                "98765\n/Applications/Visual Studio Code.app\n0\n$5"
+            )
 
             with patch.object(cc_notifier, "SESSION_DIR", temp_session_dir):
                 window_id = cc_notifier.load_window_id("test_session")
@@ -592,11 +730,12 @@ class TestRemoteMode:
             assert cc_notifier.is_remote_session() is True
 
     def test_remote_mode_init_uses_placeholder(self, tmp_path):
-        """Test cmd_init() uses placeholder window ID in remote mode."""
+        """Test cmd_init() uses placeholder window ID in remote mode with tmux."""
         test_input = {"session_id": "remote123", "cwd": "/test/path"}
         session_dir = tmp_path / "cc_notifier"
 
         with (
+            patch("cc_notifier.get_tmux_session_id", return_value="$10"),
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "init"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
@@ -610,21 +749,24 @@ class TestRemoteMode:
         ):
             cc_notifier.main()
 
-        # Verify placeholder window ID and app name were saved
+        # Verify placeholder window ID and tmux session ID were saved
         session_file = session_dir / "remote123"
         assert session_file.exists()
-        content = session_file.read_text().strip()
-        assert content == "REMOTE\nREMOTE\n0"
+        lines = session_file.read_text().strip().split("\n")
+        assert lines[0] == "REMOTE"
+        assert lines[1] == "REMOTE"
+        assert lines[2] == "0"
+        assert lines[3] == "$10"  # tmux session ID still captured in remote mode
 
     def test_remote_mode_skips_local_notification(self, tmp_path):
         """Test cmd_notify() skips local notifications in remote mode."""
         test_input = {"session_id": "remote123", "cwd": "/test/project"}
         session_dir = tmp_path / "cc_notifier"
         session_dir.mkdir()
-        (session_dir / "remote123").write_text("REMOTE\nREMOTE\n0")
+        (session_dir / "remote123").write_text("REMOTE\nREMOTE\n0\n$10")
 
         with (
-            patch("subprocess.Popen") as mock_popen,
+            patch("cc_notifier.run_background_command") as mock_bg,
             patch("sys.stdin", StringIO(json.dumps(test_input))),
             patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.object(cc_notifier, "SESSION_DIR", session_dir),
@@ -639,14 +781,38 @@ class TestRemoteMode:
             cc_notifier.main()
 
         # Verify no terminal-notifier subprocess started (remote mode skips local notifications)
-        if mock_popen.called:
-            popen_calls = [call[0][0] for call in mock_popen.call_args_list]
-            terminal_notifier_calls = [
-                cmd
-                for cmd in popen_calls
-                if any("terminal-notifier" in str(arg) for arg in cmd)
-            ]
-            assert len(terminal_notifier_calls) == 0
+        mock_bg.assert_not_called()
+
+    def test_push_uses_extended_intervals_when_tmux_attached(self, tmp_path):
+        """Test push uses extended idle check intervals when tmux session is attached."""
+        test_input = {"session_id": "remote123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "remote123").write_text("REMOTE\nREMOTE\n0\n$10")
+
+        with (
+            patch("cc_notifier.is_tmux_session_attached", return_value=True),
+            patch("cc_notifier.check_idle_and_notify_push") as mock_idle_push,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_WRAPPER": "1",
+                    "SSH_CONNECTION": "1.2.3.4 12345 5.6.7.8 22",
+                    "PUSHOVER_API_TOKEN": "test_token",
+                    "PUSHOVER_USER_KEY": "test_user",
+                },
+            ),
+        ):
+            cc_notifier.main()
+
+        # Push idle check IS called, but with extended attached intervals
+        mock_idle_push.assert_called_once()
+        call_args = mock_idle_push.call_args
+        intervals = call_args[0][1]  # second positional arg
+        assert intervals == cc_notifier.PUSH_IDLE_CHECK_INTERVALS_ATTACHED
 
     def test_tty_idle_detection(self):
         """Test get_tty_idle_time() correctly calculates idle time from TTY st_atime."""
@@ -685,6 +851,61 @@ class TestRemoteMode:
 
         # Verify push notification was NOT sent (user was active)
         mock_send.assert_not_called()
+
+
+class TestTmuxSessionDetection:
+    """Test tmux session ID capture and attachment checking."""
+
+    def test_get_tmux_session_id_success(self):
+        """Test get_tmux_session_id() returns session ID when in tmux."""
+        mock_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="$20\n", stderr=""
+        )
+        with patch("subprocess.run", return_value=mock_result):
+            result = cc_notifier.get_tmux_session_id()
+
+        assert result == "$20"
+
+    def test_get_tmux_session_id_not_in_tmux(self):
+        """Test get_tmux_session_id() returns None when not in tmux."""
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            result = cc_notifier.get_tmux_session_id()
+
+        assert result is None
+
+    def test_get_tmux_session_id_timeout(self):
+        """Test get_tmux_session_id() returns None on timeout."""
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("tmux", 2)):
+            result = cc_notifier.get_tmux_session_id()
+
+        assert result is None
+
+    def test_is_tmux_session_attached_true(self):
+        """Test is_tmux_session_attached() returns True when session has clients."""
+        mock_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="2\n", stderr=""
+        )
+        with patch("subprocess.run", return_value=mock_result):
+            result = cc_notifier.is_tmux_session_attached("$20")
+
+        assert result is True
+
+    def test_is_tmux_session_attached_false(self):
+        """Test is_tmux_session_attached() returns False when session has no clients."""
+        mock_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="0\n", stderr=""
+        )
+        with patch("subprocess.run", return_value=mock_result):
+            result = cc_notifier.is_tmux_session_attached("$20")
+
+        assert result is False
+
+    def test_is_tmux_session_attached_tmux_unavailable(self):
+        """Test is_tmux_session_attached() returns False when tmux is not installed."""
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            result = cc_notifier.is_tmux_session_attached("$20")
+
+        assert result is False
 
 
 class TestTitleFormat:
