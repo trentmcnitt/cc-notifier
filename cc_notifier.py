@@ -8,7 +8,9 @@ Note to AI: YOU MUST READ ./cc_notifier.context.md BEFORE ANALYZING OR WORKING W
 import fcntl
 import json
 import os
+import re
 import shlex
+import socket
 import subprocess
 import sys
 import time
@@ -439,6 +441,58 @@ require('hs.notify').new({{title="cc-notifier", informativeText="Could not resto
 # ============================================================================
 
 
+def resolve_title_tokens(hook_data: HookData) -> dict[str, str]:
+    """Build dict of built-in tokens for title formatting.
+
+    Tokens: {hostname}, {tmux_session}, {dir}, {cwd}.
+    """
+    tokens: dict[str, str] = {
+        "cwd": hook_data.cwd or "",
+        "dir": Path(hook_data.cwd).name if hook_data.cwd else "",
+    }
+
+    try:
+        tokens["hostname"] = socket.gethostname()
+    except Exception:
+        tokens["hostname"] = ""
+
+    try:
+        result = subprocess.run(
+            ["tmux", "display-message", "-p", "#S"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        tokens["tmux_session"] = result.stdout.strip() if result.returncode == 0 else ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        tokens["tmux_session"] = ""
+
+    return tokens
+
+
+def format_title(hook_data: HookData) -> str:
+    """Format notification title from CC_NOTIFIER_TITLE_FORMAT env var.
+
+    Supports built-in tokens ({hostname}, {tmux_session}, {dir}, {cwd})
+    and generic env var access via {env:VAR_NAME}.
+
+    Returns "Claude Code" when CC_NOTIFIER_TITLE_FORMAT is not set.
+    """
+    template = os.getenv("CC_NOTIFIER_TITLE_FORMAT")
+    if not template:
+        return "Claude Code"
+
+    # Pre-pass: resolve {env:VAR_NAME} tokens before .format()
+    template = re.sub(
+        r"\{env:([^}]+)\}",
+        lambda m: os.getenv(m.group(1), ""),
+        template,
+    )
+
+    tokens = resolve_title_tokens(hook_data)
+    return template.format(**tokens)
+
+
 def create_notification_data(
     hook_data: HookData, for_push: bool = False
 ) -> tuple[str, str, str]:
@@ -451,18 +505,18 @@ def create_notification_data(
         else "Completed task"
     )
 
-    # Generate title
-    if for_push:
-        title = subtitle
-        if DEBUG:
+    # Generate title from format template
+    title = format_title(hook_data)
+
+    # Apply debug decorations
+    if DEBUG:
+        if for_push:
             now = time.time()
             dt = time.localtime(now)
             milliseconds = int((now % 1) * 1000)
             timestamp = f"{time.strftime('%H:%M:%S', dt)}.{milliseconds:03d}"
-            title = f"{title} [{timestamp}]"  # Debug mode always shows timestamp
-    else:
-        title = "Claude Code 🔔"
-        if DEBUG:
+            title = f"{title} [{timestamp}]"
+        else:
             title = f"\\[DEBUG] {title}"
 
     return title, subtitle, message
@@ -528,7 +582,8 @@ class PushConfig:
 def build_push_url(hook_data: HookData) -> Optional[str]:
     """Build push notification URL from env var template.
 
-    Substitutes {cwd} and {session_id} placeholders with actual values.
+    Substitutes {cwd}, {session_id}, and all title tokens ({hostname},
+    {tmux_session}, {dir}, {env:VAR}) with actual values.
 
     Returns:
         URL with placeholders substituted, or None if not configured.
@@ -537,7 +592,16 @@ def build_push_url(hook_data: HookData) -> Optional[str]:
     if not url_template:
         return None
 
-    url = url_template.format(cwd=hook_data.cwd, session_id=hook_data.session_id)
+    # Pre-pass: resolve {env:VAR_NAME} tokens
+    url_template = re.sub(
+        r"\{env:([^}]+)\}",
+        lambda m: os.getenv(m.group(1), ""),
+        url_template,
+    )
+
+    tokens = resolve_title_tokens(hook_data)
+    tokens["session_id"] = hook_data.session_id
+    url = url_template.format(**tokens)
     debug_log(f"Push URL built: {url}")
     return url
 

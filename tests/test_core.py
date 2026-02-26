@@ -610,6 +610,217 @@ class TestRemoteMode:
         mock_send.assert_not_called()
 
 
+class TestTitleFormat:
+    """Test customizable title format via CC_NOTIFIER_TITLE_FORMAT."""
+
+    def test_default_title_when_env_not_set(self):
+        """Test format_title() returns 'Claude Code' when env var is not set."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test/project")
+
+        with patch.dict(os.environ, {}, clear=True):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "Claude Code"
+
+    def test_custom_format_with_dir_token(self):
+        """Test {dir} token resolves to directory basename."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/Users/luke/myproject")
+
+        with (
+            patch.dict(os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "CC: {dir}"}),
+            patch("subprocess.run"),  # avoid real tmux call
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "CC: myproject"
+
+    def test_custom_format_with_hostname_token(self):
+        """Test {hostname} token resolves to socket.gethostname()."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+
+        with (
+            patch.dict(os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "{hostname}"}),
+            patch("socket.gethostname", return_value="lukes-mbp"),
+            patch("subprocess.run"),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "lukes-mbp"
+
+    def test_custom_format_with_tmux_session_token(self):
+        """Test {tmux_session} token resolves via tmux command."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+
+        mock_result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="dev-session\n", stderr=""
+        )
+        with (
+            patch.dict(
+                os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "{tmux_session}"}
+            ),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "dev-session"
+
+    def test_tmux_session_empty_when_not_in_tmux(self):
+        """Test {tmux_session} resolves to empty string when tmux is not available."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+
+        with (
+            patch.dict(
+                os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "X{tmux_session}X"}
+            ),
+            patch("subprocess.run", side_effect=FileNotFoundError),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "XX"
+
+    def test_custom_format_with_cwd_token(self):
+        """Test {cwd} token resolves to full working directory."""
+        hook_data = cc_notifier.HookData(
+            session_id="test", cwd="/Users/luke/code/project"
+        )
+
+        with (
+            patch.dict(os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "{cwd}"}),
+            patch("subprocess.run"),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "/Users/luke/code/project"
+
+    def test_custom_format_with_all_tokens(self):
+        """Test format string with all built-in tokens."""
+        hook_data = cc_notifier.HookData(
+            session_id="test", cwd="/Users/luke/myproject"
+        )
+
+        mock_tmux = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="main\n", stderr=""
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {"CC_NOTIFIER_TITLE_FORMAT": "{hostname} · {tmux_session} · {dir}"},
+            ),
+            patch("socket.gethostname", return_value="ec2-dev"),
+            patch("subprocess.run", return_value=mock_tmux),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "ec2-dev · main · myproject"
+
+    def test_env_var_token(self):
+        """Test {env:VAR_NAME} resolves to environment variable value."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_TITLE_FORMAT": "{env:MY_CUSTOM_LABEL}",
+                    "MY_CUSTOM_LABEL": "custom-host",
+                },
+            ),
+            patch("subprocess.run"),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "custom-host"
+
+    def test_env_var_token_missing_var(self):
+        """Test {env:VAR_NAME} resolves to empty string when var is not set."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test")
+
+        env = {"CC_NOTIFIER_TITLE_FORMAT": "X{env:NONEXISTENT_VAR}X"}
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("subprocess.run"),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "XX"
+
+    def test_env_var_token_mixed_with_builtins(self):
+        """Test {env:VAR} mixed with built-in tokens."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test/proj")
+
+        mock_tmux = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="work\n", stderr=""
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "CC_NOTIFIER_TITLE_FORMAT": "{env:TEAM} - {dir}",
+                    "TEAM": "infra",
+                },
+            ),
+            patch("subprocess.run", return_value=mock_tmux),
+        ):
+            result = cc_notifier.format_title(hook_data)
+
+        assert result == "infra - proj"
+
+    def test_resolve_title_tokens_returns_all_keys(self):
+        """Test resolve_title_tokens returns dict with all expected keys."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test/project")
+
+        mock_tmux = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="sess\n", stderr=""
+        )
+        with (
+            patch("socket.gethostname", return_value="myhost"),
+            patch("subprocess.run", return_value=mock_tmux),
+        ):
+            tokens = cc_notifier.resolve_title_tokens(hook_data)
+
+        assert set(tokens.keys()) == {"hostname", "tmux_session", "dir", "cwd"}
+        assert tokens["hostname"] == "myhost"
+        assert tokens["tmux_session"] == "sess"
+        assert tokens["dir"] == "project"
+        assert tokens["cwd"] == "/test/project"
+
+    def test_create_notification_data_uses_format_title(self):
+        """Test create_notification_data uses format_title for both local and push."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test/project")
+
+        with (
+            patch.dict(
+                os.environ, {"CC_NOTIFIER_TITLE_FORMAT": "{dir} on {hostname}"}
+            ),
+            patch("socket.gethostname", return_value="myhost"),
+            patch("subprocess.run"),
+        ):
+            local_title, _, _ = cc_notifier.create_notification_data(
+                hook_data, for_push=False
+            )
+            push_title, _, _ = cc_notifier.create_notification_data(
+                hook_data, for_push=True
+            )
+
+        assert local_title == "project on myhost"
+        assert push_title == "project on myhost"
+
+    def test_create_notification_data_default_title(self):
+        """Test create_notification_data uses 'Claude Code' default for both modes."""
+        hook_data = cc_notifier.HookData(session_id="test", cwd="/test/project")
+
+        with patch.dict(os.environ, {}, clear=True):
+            local_title, _, _ = cc_notifier.create_notification_data(
+                hook_data, for_push=False
+            )
+            push_title, _, _ = cc_notifier.create_notification_data(
+                hook_data, for_push=True
+            )
+
+        assert local_title == "Claude Code"
+        assert push_title == "Claude Code"
+
+
 class TestPushNotificationURL:
     """Test push notification URL construction and encoding."""
 
