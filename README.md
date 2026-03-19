@@ -29,7 +29,7 @@ require("hs.window")
 require("hs.window.filter")
 require("hs.timer")
 
-# Reload: hs -c "hs.reload()"
+# Reload: hs -c "hs.timer.doAfter(0, hs.reload)"
 
 # Install cc-notifier
 git clone https://github.com/trentmcnitt/cc-notifier.git

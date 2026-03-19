@@ -203,7 +203,7 @@ All configuration is centralized in `pyproject.toml` following modern Python sta
 
 ```bash
 # Reload Hammerspoon configuration
-hs -c "hs.reload()"
+hs -c "hs.timer.doAfter(0, hs.reload)"
 
 # Clear Hammerspoon console for clean testing
 hs -c "hs.console.clearConsole()"
@@ -225,7 +225,7 @@ end"
 1. **Clear console**: `hs -c "hs.console.clearConsole()"`
 2. **Test operation**: Run cc-notifier or test command
 3. **Check console**: View logs with timestamps to correlate errors
-4. **Reload if needed**: `hs -c "hs.reload()"` if Hammerspoon gets stuck
+4. **Reload if needed**: `hs -c "hs.timer.doAfter(0, hs.reload)"` if Hammerspoon gets stuck
 
 Check out [Hammerspoon docs](https://www.hammerspoon.org/docs/) for more commands and troubleshooting tips, like [hs.logger](https://www.hammerspoon.org/docs/hs.logger.html)
 
