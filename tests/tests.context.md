@@ -8,13 +8,13 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **37 total tests** across 2 files - All tests properly accounted for and documented
+**Status**: **51 total tests** across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
 ---
 
-## test_core.py (31 tests) - Core Functionality & Essential Business Logic
+## test_core.py (45 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (8 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -51,6 +51,22 @@ Associated with: all tests in the codebase
 - `test_remote_mode_skips_local_notification` - Remote mode skips terminal-notifier - Validates remote mode behavior without local notifications
 - `test_tty_idle_detection` - TTY access time calculation for remote idle detection - Critical for remote push notification timing
 - `test_baseline_idle_detection` - User activity detection during check periods - Ensures push notifications only sent when user truly idle
+
+### TestTitleFormat (14 tests) - Customizable Title Format Testing
+- `test_default_title_when_env_not_set` - format_title() returns None when env var is not set - Ensures callers use their own defaults
+- `test_custom_format_with_dir_token` - {dir} token resolves to directory basename - Core token functionality
+- `test_custom_format_with_hostname_token` - {hostname} token resolves to socket.gethostname() - Core token functionality
+- `test_custom_format_with_tmux_session_token` - {tmux_session} token resolves via tmux command - Core token functionality
+- `test_tmux_session_empty_when_not_in_tmux` - {tmux_session} resolves to empty string when tmux unavailable - Graceful degradation
+- `test_custom_format_with_cwd_token` - {cwd} token resolves to full working directory - Core token functionality
+- `test_custom_format_with_all_tokens` - Format string with all built-in tokens combined - Integration of all tokens
+- `test_env_var_token` - {env:VAR_NAME} resolves to environment variable value - Generic env var access
+- `test_env_var_token_missing_var` - {env:VAR_NAME} resolves to empty string when var not set - Graceful degradation
+- `test_env_var_token_mixed_with_builtins` - {env:VAR} mixed with built-in tokens - Token system interoperability
+- `test_resolve_title_tokens_returns_all_keys` - resolve_title_tokens returns all keys when template uses them - Token dict completeness
+- `test_resolve_title_tokens_skips_tmux_when_not_in_template` - Tmux subprocess not called when {tmux_session} not in template - Lazy resolution performance
+- `test_create_notification_data_uses_format_title` - create_notification_data uses custom format for both local and push - Custom title integration
+- `test_create_notification_data_default_preserves_originals` - Default titles preserved: local gets emoji, push gets project basename - Backward compatibility
 
 ### TestPushNotificationURL (5 tests) - Push Notification URL Construction & Encoding
 - `test_build_push_url_substitutes_placeholders` - Placeholder substitution for {cwd} and {session_id} - Core URL template functionality
