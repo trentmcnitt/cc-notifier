@@ -152,7 +152,7 @@ class TestCLIInterface:
             patch("sys.stdin.read", return_value='{"session_id": "test"}'),
             patch(
                 "cc_notifier.get_focused_window_id",
-                side_effect=ValueError("Test error"),
+                side_effect=RuntimeError("Hammerspoon not found"),
             ),
             patch("cc_notifier.check_idle_and_notify_push") as mock_push,
             patch(

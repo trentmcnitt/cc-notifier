@@ -106,7 +106,7 @@ def cmd_init() -> None:
     else:
         try:
             window_id, app_path = get_focused_window_id()
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
             debug_log(f"Window capture failed, continuing without: {e}")
     save_window_id(hook_data.session_id, window_id, app_path)
@@ -133,7 +133,7 @@ def cmd_notify() -> None:
     if not is_remote_session():
         try:
             send_local_notification_if_needed(hook_data, original_window_id)
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             log_error("Local notification failed, continuing to push", e)
 
     # Push notifications if configured

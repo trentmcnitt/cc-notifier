@@ -28,6 +28,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 1. Parse session data from stdin JSON
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
+   **Hammerspoon Missing**: Falls back to "UNAVAILABLE" placeholder (graceful degradation)
 3. Save window ID, app path, and timestamp to `/tmp/cc_notifier/{session_id}`
 4. Exit immediately
 
@@ -39,10 +40,12 @@ Flows are in the order they are executed, and are performed synchronously, unles
 2. Load original window ID from session file
 3. Check deduplication threshold (prevent spam within 2 seconds)
 4. **Desktop Mode Only**:
-   - Get current focused window ID via Hammerspoon CLI
+   - If window ID is "UNAVAILABLE": send unconditional notification without click-to-focus
+   - Otherwise: Get current focused window ID via Hammerspoon CLI
    - Compare original vs current window ID
      - Same window: Don't send local notification, continue to push check
      - Different window: Send local notification via terminal-notifier with click-to-focus
+   - Local notification failures are caught so push notifications still fire
    - Update session timestamp
 5. **Remote Mode Only**: Skip local notifications entirely
 6. **Push Notifications** (if push credentials exist):
