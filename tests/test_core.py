@@ -168,8 +168,6 @@ class TestCLIInterface:
         # Push notification path was reached despite local failure
         mock_push.assert_called_once()
 
-
-
     def test_main_blocks_direct_execution_without_wrapper_env(self, capsys):
         """Test main() blocks execution without CC_NOTIFIER_WRAPPER environment variable."""
         with (
