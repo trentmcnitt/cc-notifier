@@ -221,6 +221,10 @@ caffeinate -i                # Temporary prevention
 - Try closing and re-opening the terminal/IDE window
 - Apps can get into states where Hammerspoon can't focus them
 
+## Known Limitations
+
+**Tmux "attached" does not mean "viewing":** When Hammerspoon is unavailable (e.g., remote mode without window tracking), cc-notifier uses tmux session attachment status as a proxy for whether you're looking at Claude Code output. However, a tmux session being attached only means a terminal client is connected—you could be looking at a completely different tmux window or pane. This can lead to false notification suppression if you have complex multi-window tmux setups.
+
 ## Development
 
 ```bash
