@@ -14,6 +14,7 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 
 - **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, and timestamp
 - **Window Management**: Hammerspoon CLI for cross-space window focusing
+- **Tab Management**: iTerm2 AppleScript for tab-level focus restoration (captures session UUID during init, selects tab on click)
 - **Local Notifications**: terminal-notifier with `-execute` parameter for click actions
 - **Push Notifications**: Pushover API integration
 
@@ -29,8 +30,9 @@ Flows are in the order they are executed, and are performed synchronously, unles
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
    **Hammerspoon Missing**: Falls back to "UNAVAILABLE" placeholder (graceful degradation)
-3. Save window ID, app path, and timestamp to `/tmp/cc_notifier/{session_id}`
-4. Exit immediately
+3. **iTerm2 Tab Capture**: If focused app is iTerm2, capture session ID via AppleScript for tab-level focus restoration
+4. Save window ID, app path, timestamp, and optional tab ID to `/tmp/cc_notifier/{session_id}`
+5. Exit immediately
 
 ### `cc-notifier notify`
 **Trigger**: Claude Code Stop/Notification hooks (Stop: Runs when the main Claude Code agent has finished responding. Notification: Runs when Claude needs user attention - permission prompts, idle timeouts, auth events, and other notification types)
@@ -44,7 +46,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
    - Otherwise: Get current focused window ID via Hammerspoon CLI
    - Compare original vs current window ID
      - Same window: Don't send local notification, continue to push check
-     - Different window: Send local notification via terminal-notifier with click-to-focus
+     - Different window: Send local notification via terminal-notifier with click-to-focus (includes iTerm2 tab selection if tab ID was captured)
    - Local notification failures are caught so push notifications still fire
    - Update session timestamp
 5. **Remote Mode Only**: Skip local notifications entirely
@@ -98,6 +100,7 @@ Note: Claude Code sends additional fields (e.g., `transcript_path`) that are fil
   <window_id>
   <app_path>
   <unix_timestamp>
+  <tab_id>           (optional, iTerm2 session UUID for tab-level focus)
   ```
 
 **Log Files**

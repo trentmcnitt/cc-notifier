@@ -8,13 +8,13 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **54 total tests** across 2 files - All tests properly accounted for and documented
+**Status**: **59 total tests** across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
 ---
 
-## test_core.py (48 tests) - Core Functionality & Essential Business Logic
+## test_core.py (53 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (9 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -47,6 +47,13 @@ Associated with: all tests in the codebase
 - `test_save_window_id_creates_file` - Session file creation with window ID and timestamp - Essential for window focus restoration functionality
 - `test_load_window_id_reads_saved_id` - Session file reading and window ID extraction - Required for determining original window to focus
 - `test_load_window_id_missing_file_raises_error` - Error handling when session file doesn't exist - Prevents undefined behavior when files are missing
+
+### TestITerm2TabFocus (5 tests) - iTerm2 Tab-Level Focus Restoration
+- `test_init_captures_iterm2_session_id` - Init captures iTerm2 session UUID when app is iTerm - Essential for tab-level focus restoration
+- `test_init_skips_iterm2_for_other_apps` - Init skips iTerm2 query for non-iTerm apps - Prevents unnecessary AppleScript calls
+- `test_notify_includes_tab_select_in_focus_command` - Notify chains tab selection after window focus - Validates complete focus restoration with tab
+- `test_notify_no_tab_select_without_tab_id` - Notify omits tab selection when no tab ID - Backward compatibility with sessions lacking tab ID
+- `test_create_iterm2_tab_select_command` - AppleScript command generation for tab selection - Validates correct command structure
 
 ### TestRemoteMode (5 tests) - Remote SSH Session Testing
 - `test_remote_session_detection` - SSH environment variable detection for remote mode - Essential for determining desktop vs remote mode behavior

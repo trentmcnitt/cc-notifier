@@ -109,7 +109,10 @@ class TestCLIInterface:
                 mock_stdin.assert_called_once()
                 mock_window.assert_called_once()
                 mock_save.assert_called_once_with(
-                    "test", "12345", "/System/Applications/Utilities/Terminal.app"
+                    "test",
+                    "12345",
+                    "/System/Applications/Utilities/Terminal.app",
+                    tab_id="",
                 )
 
         finally:
@@ -465,6 +468,153 @@ class TestCoreWorkflows:
             assert session_file.read_text() == old_content
 
 
+class TestITerm2TabFocus:
+    """Test iTerm2 tab-level focus restoration."""
+
+    def test_init_captures_iterm2_session_id(self, tmp_path):
+        """Test init captures iTerm2 session ID when app is iTerm."""
+        test_input = {"session_id": "iterm_test", "cwd": "/test"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("12345", "/Applications/iTerm.app"),
+            ),
+            patch(
+                "cc_notifier.get_iterm2_session_id",
+                return_value="ABC-123-DEF",
+            ) as mock_iterm,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        mock_iterm.assert_called_once()
+        content = (session_dir / "iterm_test").read_text()
+        lines = content.split("\n")
+        assert lines[0] == "12345"
+        assert lines[1] == "/Applications/iTerm.app"
+        assert lines[3] == "ABC-123-DEF"
+
+    def test_init_skips_iterm2_for_other_apps(self, tmp_path):
+        """Test init does not query iTerm2 session for non-iTerm apps."""
+        test_input = {"session_id": "other_test", "cwd": "/test"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("12345", "/Applications/Visual Studio Code.app"),
+            ),
+            patch(
+                "cc_notifier.get_iterm2_session_id",
+            ) as mock_iterm,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        mock_iterm.assert_not_called()
+        content = (session_dir / "other_test").read_text()
+        lines = content.split("\n")
+        assert lines[3] == ""  # No tab ID
+
+    def test_notify_includes_tab_select_in_focus_command(self, tmp_path):
+        """Test notify chains iTerm2 tab select after window focus."""
+        test_input = {"session_id": "tab_test", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "tab_test").write_text(
+            "original123\n/Applications/iTerm.app\n0\nABC-123-DEF"
+        )
+
+        env = {"CC_NOTIFIER_WRAPPER": "1", "CC_NOTIFIER_TITLE_FORMAT": ""}
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("different456", "/Applications/Google Chrome.app"),
+            ),
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.check_idle_and_notify_push"),
+            patch.dict(os.environ, env),
+        ):
+            cc_notifier.main()
+
+        # Find the terminal-notifier call
+        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in popen_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+        # Verify -execute contains both window focus and tab select
+        cmd = terminal_notifier_calls[0]
+        execute_idx = cmd.index("-execute")
+        execute_cmd = cmd[execute_idx + 1]
+        assert "&&" in execute_cmd
+        assert "osascript" in execute_cmd
+        assert "ABC-123-DEF" in execute_cmd
+
+    def test_notify_no_tab_select_without_tab_id(self, tmp_path):
+        """Test notify does not add tab select when no tab ID stored."""
+        test_input = {"session_id": "notab_test", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        # Session file without tab ID (backward compatible)
+        (session_dir / "notab_test").write_text(
+            "original123\n/System/Applications/Utilities/Terminal.app\n0"
+        )
+
+        env = {"CC_NOTIFIER_WRAPPER": "1", "CC_NOTIFIER_TITLE_FORMAT": ""}
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("different456", "/Applications/Google Chrome.app"),
+            ),
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.check_idle_and_notify_push"),
+            patch.dict(os.environ, env),
+        ):
+            cc_notifier.main()
+
+        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in popen_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+        cmd = terminal_notifier_calls[0]
+        execute_idx = cmd.index("-execute")
+        execute_cmd = cmd[execute_idx + 1]
+        # No tab select chained
+        assert "&&" not in execute_cmd
+
+    def test_create_iterm2_tab_select_command(self):
+        """Test AppleScript command generation for tab selection."""
+        cmd = cc_notifier.create_iterm2_tab_select_command("ABC-123-DEF")
+        assert cmd[0] == "osascript"
+        assert cmd[1] == "-e"
+        assert "ABC-123-DEF" in cmd[2]
+        assert "tell t to select" in cmd[2]
+
+
 class TestDataParsing:
     """Test HookData dataclass parsing and validation."""
 
@@ -542,7 +692,7 @@ class TestSessionFileOperations:
             assert session_file.exists()
             assert (
                 session_file.read_text()
-                == "12345\n/System/Applications/Utilities/Terminal.app\n0"
+                == "12345\n/System/Applications/Utilities/Terminal.app\n0\n"
             )
 
     def test_load_window_id_reads_saved_id(self):

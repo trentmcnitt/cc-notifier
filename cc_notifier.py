@@ -100,6 +100,7 @@ def main() -> None:
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID and app path."""
     hook_data = HookData.from_stdin()
+    tab_id = ""
     if is_remote_session():
         window_id, app_path = "REMOTE", "REMOTE"
         debug_log("Remote session detected, skipping window capture")
@@ -109,7 +110,9 @@ def cmd_init() -> None:
         except (RuntimeError, OSError) as e:
             window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
             debug_log(f"Window capture failed, continuing without: {e}")
-    save_window_id(hook_data.session_id, window_id, app_path)
+        if app_path.endswith("/iTerm.app"):
+            tab_id = get_iterm2_session_id()
+    save_window_id(hook_data.session_id, window_id, app_path, tab_id=tab_id)
 
 
 @handle_command_errors("notify")
@@ -125,6 +128,8 @@ def cmd_notify() -> None:
     lines = session_file.read_text().strip().split("\n")
     original_window_id = lines[0]
     app_path = lines[1]
+    # Tab ID is optional (4th line, index 3) for backward compatibility
+    tab_id = lines[3] if len(lines) > 3 else ""
 
     # Set global app path for error handling
     _CURRENT_APP_PATH = app_path
@@ -132,7 +137,9 @@ def cmd_notify() -> None:
     # Local notifications only in desktop mode
     if not is_remote_session():
         try:
-            send_local_notification_if_needed(hook_data, original_window_id)
+            send_local_notification_if_needed(
+                hook_data, original_window_id, tab_id=tab_id
+            )
         except (RuntimeError, OSError) as e:
             log_error("Local notification failed, continuing to push", e)
 
@@ -208,14 +215,15 @@ def check_deduplication(session_file: Path) -> bool:
         with open(session_file, "r+") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             lines = f.read().strip().split("\n")
-            # Lines: [0]=window_id, [1]=app_name, [2]=timestamp
+            # Lines: [0]=window_id, [1]=app_name, [2]=timestamp, [3]=tab_id (optional)
             if (
                 time.time() - float(lines[2])
                 < NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS
             ):
                 return True
+            tab_id = lines[3] if len(lines) > 3 else ""
             f.seek(0)
-            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}")
+            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}\n{tab_id}")
             f.truncate()
             return False
     except BlockingIOError:
@@ -223,7 +231,7 @@ def check_deduplication(session_file: Path) -> bool:
 
 
 def send_local_notification_if_needed(
-    hook_data: HookData, original_window_id: str
+    hook_data: HookData, original_window_id: str, tab_id: str = ""
 ) -> None:
     """Send local notification if user switched away from original window."""
     # Without Hammerspoon, always send notification (no window comparison possible)
@@ -243,7 +251,7 @@ def send_local_notification_if_needed(
     title, subtitle, message = create_notification_data(hook_data)
 
     debug_log(
-        f"Sending local notification: original_window={original_window_id}, current_window={current_window_id}, notification='{title}' | '{subtitle}' | '{message}'"
+        f"Sending local notification: original_window={original_window_id}, current_window={current_window_id}, tab_id={tab_id}, notification='{title}' | '{subtitle}' | '{message}'"
     )
 
     send_notification(
@@ -251,16 +259,19 @@ def send_local_notification_if_needed(
         subtitle=subtitle,
         message=message,
         focus_window_id=original_window_id,
+        tab_id=tab_id,
     )
 
 
-def save_window_id(session_id: str, window_id: str, app_path: str) -> None:
-    """Save window ID and app path to session file."""
+def save_window_id(
+    session_id: str, window_id: str, app_path: str, tab_id: str = ""
+) -> None:
+    """Save window ID, app path, and optional tab ID to session file."""
     SESSION_DIR.mkdir(exist_ok=True)
     session_file = SESSION_DIR / session_id
-    session_file.write_text(f"{window_id}\n{app_path}\n0")
+    session_file.write_text(f"{window_id}\n{app_path}\n0\n{tab_id}")
     debug_log(
-        f"Session initialized: window_id={window_id}, app_path={app_path}, session_file={session_file}"
+        f"Session initialized: window_id={window_id}, app_path={app_path}, tab_id={tab_id}, session_file={session_file}"
     )
 
 
@@ -451,6 +462,49 @@ require('hs.notify').new({{title="cc-notifier", informativeText="Could not resto
 
 
 # ============================================================================
+# ITERM2 INTEGRATION - Tab-Level Focus Restoration
+# ============================================================================
+
+
+def get_iterm2_session_id() -> str:
+    """Get the current iTerm2 session ID for tab-level focus restoration.
+
+    Returns the session UUID or empty string on failure.
+    """
+    try:
+        output = run_command(
+            [
+                "osascript",
+                "-e",
+                'tell application "iTerm2" to get id of current session of current tab of current window',
+            ],
+            timeout=3,
+        )
+        debug_log(f"iTerm2 session ID captured: {output}")
+        return output
+    except (RuntimeError, subprocess.TimeoutExpired) as e:
+        debug_log(f"iTerm2 session ID capture failed: {e}")
+        return ""
+
+
+def create_iterm2_tab_select_command(session_id: str) -> list[str]:
+    """Create an AppleScript command to select the iTerm2 tab containing the given session ID."""
+    script = f"""tell application "iTerm2"
+  repeat with w in windows
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        if id of s is "{session_id}" then
+          tell t to select
+          return
+        end if
+      end repeat
+    end repeat
+  end repeat
+end tell"""
+    return ["osascript", "-e", script]
+
+
+# ============================================================================
 # NOTIFICATION SYSTEM - macOS Notifications with Click-to-Focus
 # ============================================================================
 
@@ -549,7 +603,11 @@ def create_notification_data(
 
 
 def send_notification(
-    title: str, subtitle: str, message: str, focus_window_id: Optional[str] = None
+    title: str,
+    subtitle: str,
+    message: str,
+    focus_window_id: Optional[str] = None,
+    tab_id: str = "",
 ) -> None:
     """Send a macOS notification with optional click-to-focus functionality."""
     cmd = [
@@ -569,13 +627,20 @@ def send_notification(
     if focus_window_id:
         focus_cmd = create_focus_command(focus_window_id)
         execute_cmd = " ".join(shlex.quote(arg) for arg in focus_cmd)
+        # Chain iTerm2 tab selection after window focus
+        if tab_id:
+            tab_cmd = create_iterm2_tab_select_command(tab_id)
+            tab_cmd_str = " ".join(shlex.quote(arg) for arg in tab_cmd)
+            execute_cmd = f"{execute_cmd} && {tab_cmd_str}"
         cmd.extend(["-execute", execute_cmd])
 
     # Send notification in background
     try:
         run_background_command(cmd)
         if DEBUG:
-            debug_log(f"Notification sent: focus_window_id={focus_window_id}")
+            debug_log(
+                f"Notification sent: focus_window_id={focus_window_id}, tab_id={tab_id}"
+            )
     except Exception as e:
         debug_log(f"Notification failed: {type(e).__name__}")
         raise
