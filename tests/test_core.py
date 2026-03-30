@@ -606,6 +606,89 @@ class TestITerm2TabFocus:
         # No tab select chained
         assert "&&" not in execute_cmd
 
+    def test_notify_sends_when_same_window_different_tab(self, tmp_path):
+        """Test notify sends notification when same iTerm2 window but different tab."""
+        test_input = {"session_id": "difftab_test", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "difftab_test").write_text(
+            "original123\n/Applications/iTerm.app\n0\nTAB-ORIGINAL"
+        )
+
+        env = {"CC_NOTIFIER_WRAPPER": "1", "CC_NOTIFIER_TITLE_FORMAT": ""}
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("original123", "/Applications/iTerm.app"),
+            ),
+            patch(
+                "cc_notifier.get_iterm2_session_id",
+                return_value="TAB-DIFFERENT",
+            ),
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.check_idle_and_notify_push"),
+            patch.dict(os.environ, env),
+        ):
+            cc_notifier.main()
+
+        # Notification should have been sent despite same window ID
+        popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in popen_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+        # Should include tab select in the execute command
+        cmd = terminal_notifier_calls[0]
+        execute_idx = cmd.index("-execute")
+        execute_cmd = cmd[execute_idx + 1]
+        assert "TAB-ORIGINAL" in execute_cmd
+
+    def test_notify_silent_when_same_window_same_tab(self, tmp_path):
+        """Test notify stays silent when same iTerm2 window and same tab."""
+        test_input = {"session_id": "sametab_test", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "sametab_test").write_text(
+            "original123\n/Applications/iTerm.app\n0\nTAB-SAME"
+        )
+
+        env = {"CC_NOTIFIER_WRAPPER": "1", "CC_NOTIFIER_TITLE_FORMAT": ""}
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("original123", "/Applications/iTerm.app"),
+            ),
+            patch(
+                "cc_notifier.get_iterm2_session_id",
+                return_value="TAB-SAME",
+            ),
+            patch("subprocess.Popen") as mock_popen,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.check_idle_and_notify_push"),
+            patch.dict(os.environ, env),
+        ):
+            cc_notifier.main()
+
+        # No notification should be sent
+        if mock_popen.called:
+            popen_calls = [call[0][0] for call in mock_popen.call_args_list]
+            terminal_notifier_calls = [
+                cmd
+                for cmd in popen_calls
+                if any("terminal-notifier" in str(arg) for arg in cmd)
+            ]
+            assert len(terminal_notifier_calls) == 0
+
     def test_create_iterm2_tab_select_command(self):
         """Test AppleScript command generation for tab selection."""
         cmd = cc_notifier.create_iterm2_tab_select_command("ABC-123-DEF")

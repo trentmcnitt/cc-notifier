@@ -244,6 +244,22 @@ def send_local_notification_if_needed(
     current_window_id, _ = get_focused_window_id()
 
     if original_window_id == current_window_id:
+        # Same window, but check if user is on a different iTerm2 tab
+        if tab_id:
+            current_tab_id = get_iterm2_session_id()
+            if current_tab_id and current_tab_id != tab_id:
+                debug_log(
+                    f"Same window but different tab: original={tab_id}, current={current_tab_id}"
+                )
+                title, subtitle, message = create_notification_data(hook_data)
+                send_notification(
+                    title=title,
+                    subtitle=subtitle,
+                    message=message,
+                    focus_window_id=original_window_id,
+                    tab_id=tab_id,
+                )
+                return
         debug_log("User still on original window - no local notification needed")
         return
 

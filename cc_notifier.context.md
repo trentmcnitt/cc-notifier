@@ -45,7 +45,8 @@ Flows are in the order they are executed, and are performed synchronously, unles
    - If window ID is "UNAVAILABLE": send unconditional notification without click-to-focus
    - Otherwise: Get current focused window ID via Hammerspoon CLI
    - Compare original vs current window ID
-     - Same window: Don't send local notification, continue to push check
+     - Same window + same iTerm2 tab (or no tab ID): Don't send local notification, continue to push check
+     - Same window + different iTerm2 tab: Send local notification with click-to-focus and tab selection
      - Different window: Send local notification via terminal-notifier with click-to-focus (includes iTerm2 tab selection if tab ID was captured)
    - Local notification failures are caught so push notifications still fire
    - Update session timestamp
