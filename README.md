@@ -26,8 +26,17 @@ brew install terminal-notifier
 # Configure Hammerspoon (~/.hammerspoon/init.lua)
 require("hs.ipc")
 require("hs.window")
-require("hs.window.filter")
-require("hs.timer")
+require("hs.urlevent")
+
+-- cc-notifier: click-to-focus URL scheme handler
+hs.urlevent.bind("focus", function(_, params)
+    local id = params and tonumber(params.id)
+    if not id then return end
+    local w = hs.window.get(id)
+    if w then
+        w:focus()
+    end
+end)
 
 # Reload: hs -c "hs.timer.doAfter(0, hs.reload)"
 
