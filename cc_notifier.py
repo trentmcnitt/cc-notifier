@@ -9,7 +9,6 @@ import fcntl
 import json
 import os
 import re
-import shlex
 import socket
 import subprocess
 import sys
@@ -495,37 +494,17 @@ def get_focused_window_id() -> tuple[str, str]:
         ) from e
 
 
-def create_focus_command(window_id: str) -> list[str]:
+def create_focus_url(window_id: str) -> str:
+    """Create a Hammerspoon URL scheme for cross-space window focusing.
+
+    Uses hammerspoon:// URL scheme instead of hs CLI to avoid shell escaping
+    issues with terminal-notifier's -execute flag and eliminate hs CLI startup
+    overhead (~1.8s).
+
+    Requires the 'focus' URL event handler in Hammerspoon's init.lua.
+    See README for setup instructions.
     """
-    Create the Hammerspoon focus command for cross-space window focusing.
-
-    This uses a dual-filter approach to avoid infinite hangs that occur
-    with setCurrentSpace(nil). The approach combines windows from current
-    and other spaces, then searches for the target window ID.
-
-    If the window cannot be found or focused, shows an error notification.
-
-    Args:
-        window_id: The window ID to focus
-
-    Returns:
-        List of command arguments for subprocess execution
-    """
-    # Template for complex dual-filter cross-space window focusing
-    # This solves the macOS Spaces issue without using setCurrentSpace(nil) which causes hangs
-    # Shows error notification if window can't be found
-    focus_script = f"""local current = require('hs.window.filter').new():setCurrentSpace(true):getWindows()
-local other = require('hs.window.filter').new():setCurrentSpace(false):getWindows()
-for _,w in pairs(other) do table.insert(current, w) end
-for _,w in pairs(current) do
-  if w:id()=={window_id} then
-    w:focus()
-    require('hs.timer').usleep(300000)
-    return
-  end
-end
-require('hs.notify').new({{title="cc-notifier", informativeText="Could not restore window focus. Try reopening your terminal or IDE.", soundName="Basso"}}):send()"""
-    return [HAMMERSPOON_CLI, "-c", focus_script]
+    return f"hammerspoon://focus?id={window_id}"
 
 
 # ============================================================================
@@ -643,11 +622,9 @@ def send_notification(
         "-ignoreDnD",
     ]
 
-    # Add click-to-focus functionality if window ID provided
+    # Add click-to-focus via Hammerspoon URL scheme (avoids shell escaping issues)
     if focus_window_id:
-        focus_cmd = create_focus_command(focus_window_id)
-        execute_cmd = " ".join(shlex.quote(arg) for arg in focus_cmd)
-        cmd.extend(["-execute", execute_cmd])
+        cmd.extend(["-open", create_focus_url(focus_window_id)])
 
     # Send notification in background
     try:
