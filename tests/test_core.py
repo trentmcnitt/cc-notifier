@@ -524,6 +524,12 @@ class TestCoreWorkflows:
         ]
         assert len(terminal_notifier_calls) >= 1
 
+        # Verify iTerm2 restore script is included in -execute chain
+        execute_args = terminal_notifier_calls[0]
+        execute_idx = execute_args.index("-execute")
+        assert "osascript" in execute_args[execute_idx + 1]
+        assert "w0t0p0" in execute_args[execute_idx + 1]
+
     def test_cleanup_workflow_removes_session(self, tmp_path):
         """Test complete cleanup workflow: JSON input → real age-based file cleanup."""
         test_input = {"session_id": "cleanup123"}
@@ -584,6 +590,20 @@ class TestCoreWorkflows:
         assert duration_ms < MAX_WRAPPER_DURATION_MS, (
             f"Wrapper took {duration_ms:.1f}ms, expected <{MAX_WRAPPER_DURATION_MS}ms"
         )
+
+    def test_dedup_preserves_iterm2_session_id(self, tmp_path):
+        """check_deduplication must preserve the iTerm2 session ID on rewrite."""
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        session_file = session_dir / "dedup-iterm"
+        # Timestamp old enough to bypass the dedup window
+        session_file.write_text("win123\n/Applications/iTerm.app\n0\n$20\nw0t1p0")
+
+        assert cc_notifier.check_deduplication(session_file) is False
+
+        lines = session_file.read_text().strip().split("\n")
+        assert len(lines) == 5
+        assert lines[4] == "w0t1p0"
 
     def test_file_locking_prevents_race_conditions(self, tmp_path):
         """Test file locking prevents race conditions between concurrent processes."""

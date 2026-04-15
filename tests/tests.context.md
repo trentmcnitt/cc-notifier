@@ -8,13 +8,13 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **70 total tests** (61 core + 9 integration) across 2 files - All tests properly accounted for and documented
+**Status**: **71 total tests** (62 core + 9 integration) across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
 ---
 
-## test_core.py (59 tests) - Core Functionality & Essential Business Logic
+## test_core.py (62 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (9 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -27,7 +27,7 @@ Associated with: all tests in the codebase
 - `test_main_blocks_direct_execution_without_wrapper_env` - Prevents direct execution without wrapper environment variable - Critical for preventing Claude Code hooks from blocking
 - `test_main_allows_execution_with_wrapper_env` - Allows execution when wrapper environment variable is set - Ensures proper wrapper integration works correctly
 
-### TestCoreWorkflows (14 tests) - End-to-End Workflow Validation
+### TestCoreWorkflows (15 tests) - End-to-End Workflow Validation
 - `test_init_workflow_captures_and_saves_window` - Complete init workflow from JSON input to file creation including tmux session ID - End-to-end validation of session initialization
 - `test_init_workflow_without_hammerspoon` - Init falls back to UNAVAILABLE but still captures tmux session ID - Validates graceful degradation
 - `test_init_workflow_captures_iterm2_session_id` - Init captures iTerm2 focused session ID alongside window metadata - Enables same-window tab restoration for iTerm2
@@ -40,6 +40,7 @@ Associated with: all tests in the codebase
 - `test_wrapper_performance` - Bash wrapper returns immediately without waiting for Python - Critical for non-blocking hook execution in Claude Code
 - `test_notify_sent_when_same_window_but_tmux_detached` - Notify sends notification when same window but user switched tmux sessions - Detects intra-window tmux session switches
 - `test_notify_sent_when_same_iterm2_window_but_different_tab` - Notify sends local notification when iTerm2 tab changed in same window - Enables tab-level away detection in iTerm2
+- `test_dedup_preserves_iterm2_session_id` - check_deduplication preserves iTerm2 session ID on timestamp rewrite - Prevents silent loss of tab restore on second-and-later notifications
 - `test_file_locking_prevents_race_conditions` - File locking prevents race conditions and preserves tmux session ID - Essential for preventing duplicate notifications
 - `test_push_uses_extended_intervals_when_tmux_attached_desktop` - Desktop mode uses extended idle check intervals when tmux attached - Ensures attached tmux sessions use attached idle check intervals
 
