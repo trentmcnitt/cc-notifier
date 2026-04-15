@@ -12,7 +12,7 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 
 ## Key Components
 
-- **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, timestamp, and tmux session ID
+- **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, timestamp, tmux session ID, and optional iTerm2 session ID
 - **Window Management**: Hammerspoon CLI for cross-space window focusing
 - **Local Notifications**: terminal-notifier with `-execute` parameter for click actions
 - **Push Notifications**: Pushover API integration
@@ -27,10 +27,11 @@ Flows are in the order they are executed, and are performed synchronously, unles
 **Flow**:
 1. Parse session data from stdin JSON
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
+   - If focused app is iTerm2: capture focused iTerm2 session ID via AppleScript for tab-level tracking
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
    **Hammerspoon Missing**: Falls back to "UNAVAILABLE" placeholder (graceful degradation)
 3. Capture tmux session ID via `tmux display-message -p '#{session_id}'` (both modes, None if not in tmux)
-4. Save window ID, app path, timestamp, and tmux session ID to `/tmp/cc_notifier/{session_id}`
+4. Save window ID, app path, timestamp, tmux session ID, and optional iTerm2 session ID to `/tmp/cc_notifier/{session_id}`
 5. Exit immediately
 
 ### `cc-notifier notify`
@@ -48,9 +49,11 @@ Flows are in the order they are executed, and are performed synchronously, unles
    - If window ID is available:
      - Get current focused window ID via Hammerspoon CLI
      - Compare original vs current window ID
+       - Same iTerm2 window + different iTerm2 session ID: User switched tabs, send notification
        - Same window + tmux session detached: User switched tmux sessions, send notification
        - Same window + tmux attached or no tmux: Don't send local notification, continue to push check
        - Different window: Send local notification via terminal-notifier with click-to-focus
+     - Click-to-focus restores original window; for iTerm2 sessions, it also restores the original tab/session
    - Local notification failures are caught so push notifications still fire
    - Update session timestamp
 5. **Remote Mode Only**: Skip local notifications entirely
@@ -105,9 +108,10 @@ Note: Claude Code sends additional fields (e.g., `transcript_path`) that are fil
   <window_id>
   <app_path>
   <unix_timestamp>
-  <tmux_session_id>    (optional, empty string if not in tmux)
+  <tmux_session_id>      (optional, empty string if not in tmux)
+  <iterm2_session_id>    (optional, only for iTerm2 desktop sessions)
   ```
-- 4th line is optional for backward compatibility — old 3-line session files still work
+- 4th/5th lines are optional for backward compatibility — old 3-line and 4-line session files still work
 
 **Log Files**
 - Stored in `~/.cc-notifier/cc-notifier.log`
