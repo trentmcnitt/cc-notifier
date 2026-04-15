@@ -254,6 +254,34 @@ class TestCoreWorkflows:
         assert lines[2] == "0"
         assert lines[3] == "$5"  # tmux session ID still captured
 
+    def test_init_workflow_captures_iterm2_session_id(self, tmp_path):
+        """Test init captures iTerm2 session ID for tab-level restoration."""
+        test_input = {"session_id": "iterm123", "cwd": "/test/path"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("54321", "/Applications/iTerm.app"),
+            ),
+            patch("cc_notifier.get_iterm2_focused_session_id", return_value="w0t1p1"),
+            patch("cc_notifier.get_tmux_session_id", return_value="$20"),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        session_file = session_dir / "iterm123"
+        assert session_file.exists()
+        lines = session_file.read_text().strip().split("\n")
+        assert lines[0] == "54321"
+        assert lines[1] == "/Applications/iTerm.app"
+        assert lines[2] == "0"
+        assert lines[3] == "$20"
+        assert lines[4] == "w0t1p1"
+
     def test_notify_suppressed_when_tmux_attached_without_hammerspoon(self, tmp_path):
         """Test notify suppresses local notification when tmux session is attached."""
         test_input = {"session_id": "nohammer", "cwd": "/test/project"}
@@ -450,6 +478,39 @@ class TestCoreWorkflows:
             cc_notifier.main()
 
         # Notification was sent (user switched tmux sessions within same window)
+        assert mock_bg.call_count >= 1
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in bg_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+    def test_notify_sent_when_same_iterm2_window_but_different_tab(self, tmp_path):
+        """Test notify sends local notification when iTerm2 tab changed in same window."""
+        test_input = {"session_id": "notify123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "notify123").write_text(
+            "same123\n/Applications/iTerm.app\n0\n$20\nw0t0p0"
+        )
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("same123", "/Applications/iTerm.app"),
+            ),
+            patch("cc_notifier.get_iterm2_focused_session_id", return_value="w0t1p0"),
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
         assert mock_bg.call_count >= 1
         bg_calls = [call[0][0] for call in mock_bg.call_args_list]
         terminal_notifier_calls = [

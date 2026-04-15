@@ -117,6 +117,17 @@ class TestNotificationSystemIntegration:
         assert "w:focus()" in command[2]
         assert "hs.window.filter" in command[2]
 
+    def test_create_focus_command_includes_iterm2_tab_restore(self):
+        """Test create_focus_command() includes iTerm2 tab restore when session ID provided."""
+        command = cc_notifier.create_focus_command("12345", "w0t1p0")
+
+        assert len(command) == 3
+        assert command[0] == "/bin/sh"
+        assert command[1] == "-c"
+        assert "hs.window.filter" in command[2]
+        assert "osascript" in command[2]
+        assert "w0t1p0" in command[2]
+
     @patch("subprocess.Popen")
     def test_terminal_notifier_command_construction(self, mock_popen):
         """Test proper command construction for notification scenarios."""
@@ -177,3 +188,24 @@ class TestNotificationSystemIntegration:
             content = log_file.read_text()
             assert "Test error" in content
             assert "ValueError: test" in content
+
+
+class TestITerm2Integration:
+    """Test iTerm2 detection and session capture helpers."""
+
+    def test_is_iterm2_app_detection(self):
+        """Test iTerm2 app path detection for iTerm and iTerm2 variants."""
+        assert cc_notifier.is_iterm2_app("/Applications/iTerm.app")
+        assert cc_notifier.is_iterm2_app("/Applications/iTerm2.app")
+        assert not cc_notifier.is_iterm2_app(
+            "/System/Applications/Utilities/Terminal.app"
+        )
+
+    @patch("cc_notifier.run_command")
+    def test_get_iterm2_focused_session_id(self, mock_run_command):
+        """Test iTerm2 focused session ID capture and fallback behavior."""
+        mock_run_command.return_value = "w0t0p0"
+        assert cc_notifier.get_iterm2_focused_session_id() == "w0t0p0"
+
+        mock_run_command.side_effect = RuntimeError("osascript failed")
+        assert cc_notifier.get_iterm2_focused_session_id() == ""
