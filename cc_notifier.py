@@ -254,7 +254,13 @@ def send_local_notification_if_needed(
     tmux_session_id: str = "",
     iterm2_session_id: str = "",
 ) -> None:
-    """Send local notification if user switched away from original window."""
+    """Send local notification if user switched away from original window.
+
+    Detects three "switched away" scenarios:
+    - User switched to a different window entirely
+    - User switched iTerm2 tabs within the same window
+    - User detached/switched tmux sessions within the same window
+    """
     # Without Hammerspoon, check tmux session before sending
     if original_window_id == "UNAVAILABLE":
         if tmux_session_id and is_tmux_session_attached(tmux_session_id):
@@ -595,8 +601,12 @@ def create_focus_command(
 
     If the window cannot be found or focused, shows an error notification.
 
+    When iterm2_session_id is provided, chains an AppleScript command after
+    the Hammerspoon focus to restore the specific iTerm2 tab/session.
+
     Args:
         window_id: The window ID to focus
+        iterm2_session_id: Optional iTerm2 session ID for tab restoration
 
     Returns:
         List of command arguments for subprocess execution
