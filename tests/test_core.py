@@ -110,7 +110,11 @@ class TestCLIInterface:
                 mock_stdin.assert_called_once()
                 mock_window.assert_called_once()
                 mock_save.assert_called_once_with(
-                    "test", "12345", "/System/Applications/Utilities/Terminal.app", ""
+                    "test",
+                    "12345",
+                    "/System/Applications/Utilities/Terminal.app",
+                    "",
+                    "",
                 )
 
         finally:

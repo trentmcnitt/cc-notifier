@@ -114,16 +114,9 @@ def cmd_init() -> None:
             window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
             debug_log(f"Window capture failed, continuing without: {e}")
     tmux_session_id = get_tmux_session_id() or ""
-    if iterm2_session_id:
-        save_window_id(
-            hook_data.session_id,
-            window_id,
-            app_path,
-            tmux_session_id,
-            iterm2_session_id,
-        )
-    else:
-        save_window_id(hook_data.session_id, window_id, app_path, tmux_session_id)
+    save_window_id(
+        hook_data.session_id, window_id, app_path, tmux_session_id, iterm2_session_id
+    )
 
 
 @handle_command_errors("notify")
@@ -551,11 +544,11 @@ def get_iterm2_focused_session_id() -> str:
     """Get iTerm2 focused session ID, or empty string when unavailable."""
     script_lines = [
         'tell application "iTerm2"',
-        "if not running then return \"\"",
+        'if not running then return ""',
         "try",
         "return id of current session of current window as text",
         "on error",
-        "return \"\"",
+        'return ""',
         "end try",
         "end tell",
     ]
@@ -571,9 +564,7 @@ def get_iterm2_focused_session_id() -> str:
 
 def _build_iterm2_restore_script(iterm2_session_id: str) -> str:
     """Build AppleScript that focuses iTerm2 on a specific session ID."""
-    escaped_session_id = (
-        iterm2_session_id.replace("\\", "\\\\").replace('"', '\\"')
-    )
+    escaped_session_id = iterm2_session_id.replace("\\", "\\\\").replace('"', '\\"')
     return f"""tell application "iTerm2"
 if not running then return
 repeat with w in windows
