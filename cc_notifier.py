@@ -101,17 +101,22 @@ def main() -> None:
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID and app path."""
     hook_data = HookData.from_stdin()
+    iterm2_session_id = ""
     if is_remote_session():
         window_id, app_path = "REMOTE", "REMOTE"
         debug_log("Remote session detected, skipping window capture")
     else:
         try:
             window_id, app_path = get_focused_window_id()
+            if is_iterm2_app(app_path):
+                iterm2_session_id = get_iterm2_focused_session_id()
         except (RuntimeError, OSError) as e:
             window_id, app_path = "UNAVAILABLE", "UNAVAILABLE"
             debug_log(f"Window capture failed, continuing without: {e}")
     tmux_session_id = get_tmux_session_id() or ""
-    save_window_id(hook_data.session_id, window_id, app_path, tmux_session_id)
+    save_window_id(
+        hook_data.session_id, window_id, app_path, tmux_session_id, iterm2_session_id
+    )
 
 
 @handle_command_errors("notify")
@@ -128,6 +133,7 @@ def cmd_notify() -> None:
     original_window_id = lines[0]
     app_path = lines[1]
     tmux_session_id = lines[3] if len(lines) > 3 else ""
+    iterm2_session_id = lines[4] if len(lines) > 4 else ""
 
     # Set global app path for error handling
     _CURRENT_APP_PATH = app_path
@@ -136,7 +142,11 @@ def cmd_notify() -> None:
     if not is_remote_session():
         try:
             send_local_notification_if_needed(
-                hook_data, original_window_id, tmux_session_id
+                hook_data,
+                original_window_id,
+                app_path,
+                tmux_session_id,
+                iterm2_session_id,
             )
         except (RuntimeError, OSError) as e:
             log_error("Local notification failed, continuing to push", e)
@@ -223,9 +233,14 @@ def check_deduplication(session_file: Path) -> bool:
                 < NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS
             ):
                 return True
+            app_path = lines[1] if len(lines) > 1 else ""
             tmux_id = lines[3] if len(lines) > 3 else ""
+            iterm2_session_id = lines[4] if len(lines) > 4 else ""
             f.seek(0)
-            f.write(f"{lines[0]}\n{lines[1]}\n{time.time()}\n{tmux_id}")
+            updated_content = f"{lines[0]}\n{app_path}\n{time.time()}\n{tmux_id}"
+            if iterm2_session_id:
+                updated_content += f"\n{iterm2_session_id}"
+            f.write(updated_content)
             f.truncate()
             return False
     except BlockingIOError:
@@ -235,9 +250,17 @@ def check_deduplication(session_file: Path) -> bool:
 def send_local_notification_if_needed(
     hook_data: HookData,
     original_window_id: str,
+    app_path: str,
     tmux_session_id: str = "",
+    iterm2_session_id: str = "",
 ) -> None:
-    """Send local notification if user switched away from original window."""
+    """Send local notification if user switched away from original window.
+
+    Detects three "switched away" scenarios:
+    - User switched to a different window entirely
+    - User switched iTerm2 tabs within the same window
+    - User detached/switched tmux sessions within the same window
+    """
     # Without Hammerspoon, check tmux session before sending
     if original_window_id == "UNAVAILABLE":
         if tmux_session_id and is_tmux_session_attached(tmux_session_id):
@@ -250,9 +273,27 @@ def send_local_notification_if_needed(
         send_notification(title=title, subtitle=subtitle, message=message)
         return
 
-    current_window_id, _ = get_focused_window_id()
+    current_window_id, current_app_path = get_focused_window_id()
+    iterm2_tab_switched = False
 
-    if original_window_id == current_window_id:
+    if (
+        original_window_id == current_window_id
+        and iterm2_session_id
+        and is_iterm2_app(app_path)
+        and is_iterm2_app(current_app_path)
+    ):
+        current_iterm2_session_id = get_iterm2_focused_session_id()
+        if current_iterm2_session_id and current_iterm2_session_id != iterm2_session_id:
+            iterm2_tab_switched = True
+            debug_log(
+                "Same iTerm2 window but different session ID - user switched tabs"
+            )
+        elif not current_iterm2_session_id:
+            debug_log(
+                "Unable to read current iTerm2 session ID - falling back to window/tmux detection"
+            )
+
+    if original_window_id == current_window_id and not iterm2_tab_switched:
         # Same window, but check if user switched tmux sessions within it
         if tmux_session_id and not is_tmux_session_attached(tmux_session_id):
             debug_log(
@@ -274,6 +315,7 @@ def send_local_notification_if_needed(
         subtitle=subtitle,
         message=message,
         focus_window_id=original_window_id,
+        focus_iterm2_session_id=iterm2_session_id if is_iterm2_app(app_path) else None,
     )
 
 
@@ -282,13 +324,17 @@ def save_window_id(
     window_id: str,
     app_path: str,
     tmux_session_id: str = "",
+    iterm2_session_id: str = "",
 ) -> None:
-    """Save window ID, app path, and tmux session ID to session file."""
+    """Save window ID, app path, tmux, and optional iTerm2 session ID."""
     SESSION_DIR.mkdir(exist_ok=True)
     session_file = SESSION_DIR / session_id
-    session_file.write_text(f"{window_id}\n{app_path}\n0\n{tmux_session_id}")
+    content = f"{window_id}\n{app_path}\n0\n{tmux_session_id}"
+    if iterm2_session_id:
+        content += f"\n{iterm2_session_id}"
+    session_file.write_text(content)
     debug_log(
-        f"Session initialized: window_id={window_id}, app_path={app_path}, tmux={tmux_session_id}, session_file={session_file}"
+        f"Session initialized: window_id={window_id}, app_path={app_path}, tmux={tmux_session_id}, iterm2_session={iterm2_session_id}, session_file={session_file}"
     )
 
 
@@ -495,7 +541,57 @@ def get_focused_window_id() -> tuple[str, str]:
         ) from e
 
 
-def create_focus_command(window_id: str) -> list[str]:
+def is_iterm2_app(app_path: str) -> bool:
+    """Return True when app path identifies iTerm2."""
+    return app_path.endswith("/iTerm.app") or app_path.endswith("/iTerm2.app")
+
+
+def get_iterm2_focused_session_id() -> str:
+    """Get iTerm2 focused session ID, or empty string when unavailable."""
+    script_lines = [
+        'tell application "iTerm2"',
+        'if not running then return ""',
+        "try",
+        "return id of current session of current window as text",
+        "on error",
+        'return ""',
+        "end try",
+        "end tell",
+    ]
+    cmd = ["osascript"]
+    for line in script_lines:
+        cmd.extend(["-e", line])
+
+    try:
+        return run_command(cmd, timeout=5)
+    except (RuntimeError, subprocess.TimeoutExpired):
+        return ""
+
+
+def _build_iterm2_restore_script(iterm2_session_id: str) -> str:
+    """Build AppleScript that focuses iTerm2 on a specific session ID."""
+    escaped_session_id = iterm2_session_id.replace("\\", "\\\\").replace('"', '\\"')
+    return f"""tell application "iTerm2"
+if not running then return
+repeat with w in windows
+  repeat with t in tabs of w
+    repeat with s in sessions of t
+      if (id of s as text) is "{escaped_session_id}" then
+        tell w to select
+        tell t to select
+        tell s to select
+        activate
+        return
+      end if
+    end repeat
+  end repeat
+end repeat
+end tell"""
+
+
+def create_focus_command(
+    window_id: str, iterm2_session_id: Optional[str] = None
+) -> list[str]:
     """
     Create the Hammerspoon focus command for cross-space window focusing.
 
@@ -505,8 +601,12 @@ def create_focus_command(window_id: str) -> list[str]:
 
     If the window cannot be found or focused, shows an error notification.
 
+    When iterm2_session_id is provided, chains an AppleScript command after
+    the Hammerspoon focus to restore the specific iTerm2 tab/session.
+
     Args:
         window_id: The window ID to focus
+        iterm2_session_id: Optional iTerm2 session ID for tab restoration
 
     Returns:
         List of command arguments for subprocess execution
@@ -525,7 +625,16 @@ for _,w in pairs(current) do
   end
 end
 require('hs.notify').new({{title="cc-notifier", informativeText="Could not restore window focus. Try reopening your terminal or IDE.", soundName="Basso"}}):send()"""
-    return [HAMMERSPOON_CLI, "-c", focus_script]
+    if not iterm2_session_id:
+        return [HAMMERSPOON_CLI, "-c", focus_script]
+
+    hs_cmd = [HAMMERSPOON_CLI, "-c", focus_script]
+    osascript_cmd = ["osascript", "-e", _build_iterm2_restore_script(iterm2_session_id)]
+    combined = (
+        f"{' '.join(shlex.quote(arg) for arg in hs_cmd)}; "
+        f"{' '.join(shlex.quote(arg) for arg in osascript_cmd)}"
+    )
+    return ["/bin/sh", "-c", combined]
 
 
 # ============================================================================
@@ -627,7 +736,11 @@ def create_notification_data(
 
 
 def send_notification(
-    title: str, subtitle: str, message: str, focus_window_id: Optional[str] = None
+    title: str,
+    subtitle: str,
+    message: str,
+    focus_window_id: Optional[str] = None,
+    focus_iterm2_session_id: Optional[str] = None,
 ) -> None:
     """Send a macOS notification with optional click-to-focus functionality."""
     cmd = [
@@ -645,7 +758,7 @@ def send_notification(
 
     # Add click-to-focus functionality if window ID provided
     if focus_window_id:
-        focus_cmd = create_focus_command(focus_window_id)
+        focus_cmd = create_focus_command(focus_window_id, focus_iterm2_session_id)
         execute_cmd = " ".join(shlex.quote(arg) for arg in focus_cmd)
         cmd.extend(["-execute", execute_cmd])
 

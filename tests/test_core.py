@@ -110,7 +110,11 @@ class TestCLIInterface:
                 mock_stdin.assert_called_once()
                 mock_window.assert_called_once()
                 mock_save.assert_called_once_with(
-                    "test", "12345", "/System/Applications/Utilities/Terminal.app", ""
+                    "test",
+                    "12345",
+                    "/System/Applications/Utilities/Terminal.app",
+                    "",
+                    "",
                 )
 
         finally:
@@ -253,6 +257,34 @@ class TestCoreWorkflows:
         assert lines[1] == "UNAVAILABLE"
         assert lines[2] == "0"
         assert lines[3] == "$5"  # tmux session ID still captured
+
+    def test_init_workflow_captures_iterm2_session_id(self, tmp_path):
+        """Test init captures iTerm2 session ID for tab-level restoration."""
+        test_input = {"session_id": "iterm123", "cwd": "/test/path"}
+        session_dir = tmp_path / "cc_notifier"
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("54321", "/Applications/iTerm.app"),
+            ),
+            patch("cc_notifier.get_iterm2_focused_session_id", return_value="w0t1p1"),
+            patch("cc_notifier.get_tmux_session_id", return_value="$20"),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "init"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        session_file = session_dir / "iterm123"
+        assert session_file.exists()
+        lines = session_file.read_text().strip().split("\n")
+        assert lines[0] == "54321"
+        assert lines[1] == "/Applications/iTerm.app"
+        assert lines[2] == "0"
+        assert lines[3] == "$20"
+        assert lines[4] == "w0t1p1"
 
     def test_notify_suppressed_when_tmux_attached_without_hammerspoon(self, tmp_path):
         """Test notify suppresses local notification when tmux session is attached."""
@@ -459,6 +491,45 @@ class TestCoreWorkflows:
         ]
         assert len(terminal_notifier_calls) >= 1
 
+    def test_notify_sent_when_same_iterm2_window_but_different_tab(self, tmp_path):
+        """Test notify sends local notification when iTerm2 tab changed in same window."""
+        test_input = {"session_id": "notify123", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        (session_dir / "notify123").write_text(
+            "same123\n/Applications/iTerm.app\n0\n$20\nw0t0p0"
+        )
+
+        with (
+            patch(
+                "cc_notifier.get_focused_window_id",
+                return_value=("same123", "/Applications/iTerm.app"),
+            ),
+            patch("cc_notifier.get_iterm2_focused_session_id", return_value="w0t1p0"),
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.PushConfig.from_env", return_value=None),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()
+
+        assert mock_bg.call_count >= 1
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in bg_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+
+        # Verify iTerm2 restore script is included in -execute chain
+        execute_args = terminal_notifier_calls[0]
+        execute_idx = execute_args.index("-execute")
+        assert "osascript" in execute_args[execute_idx + 1]
+        assert "w0t0p0" in execute_args[execute_idx + 1]
+
     def test_cleanup_workflow_removes_session(self, tmp_path):
         """Test complete cleanup workflow: JSON input → real age-based file cleanup."""
         test_input = {"session_id": "cleanup123"}
@@ -519,6 +590,20 @@ class TestCoreWorkflows:
         assert duration_ms < MAX_WRAPPER_DURATION_MS, (
             f"Wrapper took {duration_ms:.1f}ms, expected <{MAX_WRAPPER_DURATION_MS}ms"
         )
+
+    def test_dedup_preserves_iterm2_session_id(self, tmp_path):
+        """check_deduplication must preserve the iTerm2 session ID on rewrite."""
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        session_file = session_dir / "dedup-iterm"
+        # Timestamp old enough to bypass the dedup window
+        session_file.write_text("win123\n/Applications/iTerm.app\n0\n$20\nw0t1p0")
+
+        assert cc_notifier.check_deduplication(session_file) is False
+
+        lines = session_file.read_text().strip().split("\n")
+        assert len(lines) == 5
+        assert lines[4] == "w0t1p0"
 
     def test_file_locking_prevents_race_conditions(self, tmp_path):
         """Test file locking prevents race conditions between concurrent processes."""

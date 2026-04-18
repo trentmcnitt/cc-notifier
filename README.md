@@ -2,13 +2,13 @@
 
 **Smart Notifications for Claude Code on Desktop and Mobile**
 
-Click notifications to instantly restore your exact Claude Code window across macOS Spaces—not just the app, but your specific terminal or IDE window.
+Click notifications to instantly restore your exact Claude Code context across macOS Spaces—not just the app, but your specific terminal/IDE window (and iTerm2 tab when available).
 
 Also enables seamless 📱 mobile development via push notifications.
 
 ## Features
 
-- **🎯 Click-to-Focus** - Restore exact window across Spaces, not just the app. When you have multiple terminal or IDE windows open, cc-notifier brings you back to the specific window where Claude Code is running.
+- **🎯 Click-to-Focus** - Restore exact window across Spaces, not just the app. With iTerm2, cc-notifier also restores the original tab/session within that window.
 - **🧠 Intelligent Detection** - 💻 Desktop: notifies when you switch windows | 🌐 Remote: notifies when idle
 - **⚡ Fast & Async** - Runs in background, never blocks Claude Code
 - **📲 Push Notifications** - Desktop: optional idle alerts | Remote: primary notification method (Pushover)
@@ -107,8 +107,9 @@ Add to `~/.claude/settings.json`:
 2. **Task Completion** → Compares current window vs original window
 3. **Smart Notification:**
    - 🪟 **Switched windows?** → Local notification with click-to-focus
+   - 🗂️ **Switched iTerm2 tabs in same window?** → Local notification with tab-aware click-to-focus
    - 💤 **Idle at desk?** → Optional push notification via Pushover
-4. **Click Notification** → Hammerspoon instantly restores your exact window across Spaces
+4. **Click Notification** → Hammerspoon restores your exact window across Spaces; iTerm2 sessions also restore the original tab
 
 ### 🌐 Remote Mode (SSH)
 
