@@ -82,6 +82,14 @@ def main() -> None:
         DEBUG = True
         sys.argv.remove("--debug")
 
+    icon = ""
+    if "--icon" in sys.argv:
+        idx = sys.argv.index("--icon")
+        if idx + 1 < len(sys.argv):
+            icon = sys.argv[idx + 1]
+            sys.argv.pop(idx + 1)
+        sys.argv.pop(idx)
+
     command = sys.argv[1] if len(sys.argv) > 1 else "help"
     debug_log(f"Command: {command}")
     if command in ("--version", "-v"):
@@ -89,7 +97,7 @@ def main() -> None:
     elif command == "init":
         cmd_init()
     elif command == "notify":
-        cmd_notify()
+        cmd_notify(icon=icon)
     elif command == "cleanup":
         cmd_cleanup()
     else:
@@ -120,7 +128,7 @@ def cmd_init() -> None:
 
 
 @handle_command_errors("notify")
-def cmd_notify() -> None:
+def cmd_notify(icon: str = "") -> None:
     """Send intelligent notification if user switched away from original window."""
     global _CURRENT_APP_PATH
     hook_data = HookData.from_stdin()
@@ -147,6 +155,7 @@ def cmd_notify() -> None:
                 app_path,
                 tmux_session_id,
                 iterm2_session_id,
+                icon=icon,
             )
         except (RuntimeError, OSError) as e:
             log_error("Local notification failed, continuing to push", e)
@@ -178,7 +187,7 @@ def show_help() -> None:
     """Display help information."""
     print(f"""cc-notifier {VERSION}
 
-Usage: cc-notifier [--debug] {{init|notify|cleanup|--version}}
+Usage: cc-notifier [--debug] [--icon <path>] {{init|notify|cleanup|--version}}
 
 Commands:
   init     - Initialize session (capture focused window)
@@ -187,7 +196,33 @@ Commands:
   --version - Show version information
 
 Options:
-  --debug  - Enable debug logging with timestamps
+  --debug         - Enable debug logging with timestamps
+  --icon <path>   - Path to a PNG image shown in notifications (contentImage)
+
+Example ~/.claude/settings.json hook configuration:
+
+  Basic (no icon):
+    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+      "command": "$HOME/.cc-notifier/cc-notifier notify"}}]}}]
+
+  With custom icon:
+    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+      "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}]
+
+  Full example (SessionStart + Stop + Notification + SessionEnd):
+    {{
+      "hooks": {{
+        "SessionStart": [{{"matcher": "*", "hooks": [{{"type": "command",
+          "command": "$HOME/.cc-notifier/cc-notifier init"}}]}}],
+        "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+          "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}],
+        "Notification": [{{"matcher": "permission_prompt|elicitation_dialog",
+          "hooks": [{{"type": "command",
+          "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}],
+        "SessionEnd": [{{"matcher": "*", "hooks": [{{"type": "command",
+          "command": "$HOME/.cc-notifier/cc-notifier cleanup"}}]}}]
+      }}
+    }}
 
 macOS notification system for Claude Code hooks with push notification support.
 Set PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY to enable push notifications.""")
@@ -253,6 +288,7 @@ def send_local_notification_if_needed(
     app_path: str,
     tmux_session_id: str = "",
     iterm2_session_id: str = "",
+    icon: str = "",
 ) -> None:
     """Send local notification if user switched away from original window.
 
@@ -270,7 +306,7 @@ def send_local_notification_if_needed(
             return
         debug_log("Window tracking unavailable, sending notification unconditionally")
         title, subtitle, message = create_notification_data(hook_data)
-        send_notification(title=title, subtitle=subtitle, message=message)
+        send_notification(title=title, subtitle=subtitle, message=message, icon=icon)
         return
 
     current_window_id, current_app_path = get_focused_window_id()
@@ -316,6 +352,7 @@ def send_local_notification_if_needed(
         message=message,
         focus_window_id=original_window_id,
         focus_iterm2_session_id=iterm2_session_id if is_iterm2_app(app_path) else None,
+        icon=icon,
     )
 
 
@@ -741,6 +778,7 @@ def send_notification(
     message: str,
     focus_window_id: Optional[str] = None,
     focus_iterm2_session_id: Optional[str] = None,
+    icon: str = "",
 ) -> None:
     """Send a macOS notification with optional click-to-focus functionality."""
     cmd = [
@@ -755,6 +793,10 @@ def send_notification(
         "Glass",
         "-ignoreDnD",
     ]
+
+    # Add custom content image if provided and file exists
+    if icon and os.path.isfile(icon):
+        cmd.extend(["-contentImage", icon])
 
     # Add click-to-focus functionality if window ID provided
     if focus_window_id:
