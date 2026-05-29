@@ -12,11 +12,13 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Skip PRs from forks. GitHub withholds secrets and the OIDC token from
+    # fork-triggered `pull_request` runs (security by design), so this action
+    # can't authenticate and the check fails through no fault of the contributor.
+    # To review a fork PR on demand, comment "@claude review the changes" on it:
+    # that fires claude.yml via issue_comment, which runs in this repo's context
+    # with secrets + OIDC available.
+    if: github.event.pull_request.head.repo.fork == false
 
     runs-on: ubuntu-latest
     permissions:
