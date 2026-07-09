@@ -8,13 +8,13 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **71 total tests** (62 core + 9 integration) across 2 files - All tests properly accounted for and documented
+**Status**: **72 total tests** (63 core + 9 integration) across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
 ---
 
-## test_core.py (62 tests) - Core Functionality & Essential Business Logic
+## test_core.py (63 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (9 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -27,13 +27,14 @@ Associated with: all tests in the codebase
 - `test_main_blocks_direct_execution_without_wrapper_env` - Prevents direct execution without wrapper environment variable - Critical for preventing Claude Code hooks from blocking
 - `test_main_allows_execution_with_wrapper_env` - Allows execution when wrapper environment variable is set - Ensures proper wrapper integration works correctly
 
-### TestCoreWorkflows (15 tests) - End-to-End Workflow Validation
+### TestCoreWorkflows (16 tests) - End-to-End Workflow Validation
 - `test_init_workflow_captures_and_saves_window` - Complete init workflow from JSON input to file creation including tmux session ID - End-to-end validation of session initialization
 - `test_init_workflow_without_hammerspoon` - Init falls back to UNAVAILABLE but still captures tmux session ID - Validates graceful degradation
 - `test_init_workflow_captures_iterm2_session_id` - Init captures iTerm2 focused session ID alongside window metadata - Enables same-window tab restoration for iTerm2
 - `test_notify_suppressed_when_tmux_attached_without_hammerspoon` - Notify suppresses local notification when tmux session is attached - Prevents false positives in tmux
 - `test_notify_sent_when_tmux_detached_without_hammerspoon` - Notify sends local notification when tmux session is detached - Ensures notifications when user truly away
 - `test_notify_sent_without_hammerspoon_or_tmux` - Notify sends unconditionally when neither Hammerspoon nor tmux available - Fallback behavior
+- `test_notify_handles_missing_session_file` - Notify gracefully falls back to UNAVAILABLE when init never ran for the session - Regression for GitHub issue #11 (FileNotFoundError crashed every Stop hook for sessions started before install)
 - `test_notify_workflow_user_switched_sends_notification` - Complete notify workflow when user switched windows - End-to-end validation of notification sending
 - `test_notify_workflow_user_stayed_no_notification` - Complete notify workflow when user stayed on same window - End-to-end validation of intelligent notification suppression
 - `test_cleanup_workflow_removes_session` - Complete cleanup workflow with age-based file removal - End-to-end validation of session cleanup functionality

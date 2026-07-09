@@ -34,7 +34,7 @@ if [ ${#missing_deps[@]} -ne 0 ]; then
         case "$dep" in
             "hs")
                 echo "   • Hammerspoon CLI - Install with: brew install --cask hammerspoon"
-                echo "     After installing, ensure Hammerspoon is running and CLI is enabled"
+                echo "     Then launch Hammerspoon.app and run hs.ipc.cliInstall() in its console"
                 ;;
             "terminal-notifier")
                 echo "   • terminal-notifier - Install with: brew install terminal-notifier"
@@ -49,9 +49,25 @@ if [ ${#missing_deps[@]} -ne 0 ]; then
     exit 1
 fi
 
-# Hammerspoon setup reminder
-echo "⚠️  Remember to setup Hammerspoon"
-echo "   See README section: 🔧 Hammerspoon Setup"
+# Verify hs CLI is actually responsive (not just present on PATH).
+# A missing/idle Hammerspoon makes `hs -c` hang forever — bound it with perl's
+# alarm() since macOS has no portable `timeout` command.
+echo "✅ Verifying Hammerspoon CLI is responsive..."
+hs_check=$(perl -e 'alarm 5; exec @ARGV' hs -c 'print("ok")' 2>&1 || echo "__HS_FAILED__")
+if [ "$hs_check" != "ok" ]; then
+    echo "❌ Hammerspoon CLI is not responsive."
+    echo
+    echo "   The 'hs' command exists, but it couldn't reach a running Hammerspoon."
+    echo "   Usually one of:"
+    echo "     1. Hammerspoon.app isn't running — launch it from /Applications"
+    echo "     2. The CLI shim was never installed — open the Hammerspoon Console"
+    echo "        (menu bar icon → Console) and run: hs.ipc.cliInstall()"
+    echo
+    echo "   Then re-run ./install.sh."
+    echo
+    echo "📖 See README → Desktop Mode for the full setup sequence."
+    exit 1
+fi
 
 # Check source files exist
 echo "✅ Checking source files..."

@@ -134,14 +134,26 @@ def cmd_notify(icon: str = "") -> None:
     hook_data = HookData.from_stdin()
     session_file = SESSION_DIR / hook_data.session_id
 
-    if check_deduplication(session_file):
-        return
-
-    lines = session_file.read_text().strip().split("\n")
-    original_window_id = lines[0]
-    app_path = lines[1]
-    tmux_session_id = lines[3] if len(lines) > 3 else ""
-    iterm2_session_id = lines[4] if len(lines) > 4 else ""
+    if session_file.exists():
+        if check_deduplication(session_file):
+            return
+        lines = session_file.read_text().strip().split("\n")
+        original_window_id = lines[0]
+        app_path = lines[1]
+        tmux_session_id = lines[3] if len(lines) > 3 else ""
+        iterm2_session_id = lines[4] if len(lines) > 4 else ""
+    else:
+        # init never ran for this session (installed mid-session, or Claude Code
+        # session ID mismatch per bug #7911). Fall through with no original
+        # window context — local notification path treats UNAVAILABLE as
+        # "send unless tmux is attached", and push still works.
+        debug_log(
+            f"Session file missing for {hook_data.session_id} — falling back to UNAVAILABLE"
+        )
+        original_window_id = "UNAVAILABLE"
+        app_path = "UNAVAILABLE"
+        tmux_session_id = get_tmux_session_id() or ""
+        iterm2_session_id = ""
 
     # Set global app path for error handling
     _CURRENT_APP_PATH = app_path
