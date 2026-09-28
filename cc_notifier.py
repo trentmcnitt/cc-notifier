@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 # Constants and configuration
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 SESSION_DIR = Path("/tmp/cc_notifier")
 CLEANUP_AGE_SECONDS = 5 * 24 * 60 * 60
 NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0

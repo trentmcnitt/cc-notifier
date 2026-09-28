@@ -77,7 +77,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 4. Exit
 
 ### `cc-notifier --version` / `cc-notifier -v`
-**Purpose**: Display current version (0.3.0)
+**Purpose**: Display current version (0.4.0)
 **Flow**: Print version string and exit
 
 ### Debug Mode
