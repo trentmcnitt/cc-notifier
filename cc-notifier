@@ -1,6 +1,17 @@
 #!/bin/bash
 # cc-notifier async wrapper for Claude Code hooks
 # Runs cc-notifier in background for async operation (to prevent blocking)
+SCRIPT="$(dirname "${BASH_SOURCE[0]}")/cc_notifier.py"
+
+# Informational commands run in the foreground so their output is visible,
+# and don't read stdin (there is no hook payload)
+for arg in "$@"; do
+    case "$arg" in
+        --version|-v|--help|-h|help) exec python3 "$SCRIPT" "$@" ;;
+        *) ;;
+    esac
+done
+
 stdin_data=$(cat)
 export CC_NOTIFIER_WRAPPER=1
 # Get TTY from process table (works even with stdin redirected)
@@ -12,5 +23,5 @@ elif [ -n "$SSH_TTY" ]; then
     # Fallback to SSH_TTY in SSH sessions
     export CC_NOTIFIER_TTY="$SSH_TTY"
 fi
-echo "$stdin_data" | python3 "$(dirname "${BASH_SOURCE[0]}")/cc_notifier.py" "$@" >/dev/null 2>&1 &
+echo "$stdin_data" | python3 "$SCRIPT" "$@" >/dev/null 2>&1 &
 exit 0
