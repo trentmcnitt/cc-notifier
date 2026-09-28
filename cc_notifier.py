@@ -126,6 +126,11 @@ def parse_flags() -> str:
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID and app path."""
     hook_data = HookData.from_stdin()
+    # Compaction isn't a new session: keep the originally captured window instead
+    # of recording whatever happens to be focused mid-task
+    if hook_data.source == "compact" and (SESSION_DIR / hook_data.session_id).exists():
+        debug_log("Compaction: keeping existing session file")
+        return
     iterm2_session_id = ""
     if is_remote_session():
         window_id, app_path = "REMOTE", "REMOTE"
@@ -271,13 +276,14 @@ class HookData:
     cwd: str = ""
     hook_event_name: str = "Stop"
     message: str = ""
+    source: str = ""  # SessionStart only: startup, resume, clear, compact, fork
 
     @classmethod
     def from_stdin(cls) -> "HookData":
         """Parse hook data from JSON stdin input."""
         try:
             data = json.loads(sys.stdin.read())
-            valid_fields = {"session_id", "cwd", "hook_event_name", "message"}
+            valid_fields = {"session_id", "cwd", "hook_event_name", "message", "source"}
             filtered_data = {k: v for k, v in data.items() if k in valid_fields and v}
             hook_data = cls(**filtered_data)
             debug_log(f"Hook: {hook_data.session_id}, {hook_data.hook_event_name}")

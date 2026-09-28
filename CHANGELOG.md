@@ -16,13 +16,14 @@ All notable changes to cc-notifier are documented here. The format is based on [
 
 ### Changed
 
-- The recommended `SessionStart` matcher is now `startup|resume|clear|fork`. With `"*"`, compaction re-ran `init` and could record the wrong window. Update your `~/.claude/settings.json` to pick this up.
+- The recommended `SessionStart` matcher is now `startup|resume|clear|fork`, as defense in depth for the compaction fix below.
 - The README drops the `Stop` hook matcher, which Claude Code ignores, and narrows the `Notification` matcher to `permission_prompt|elicitation_dialog`.
 - `terminal-notifier` is found via `PATH` and both Homebrew prefixes, so local notifications work on Intel Macs.
 - The README documents requirements (including Hammerspoon's Accessibility permission), all options and placeholders, and links the cross-Space focusing research log.
 
 ### Fixed
 
+- Compaction no longer overwrites the captured window. `SessionStart` also fires on compaction, and `init` used to record whatever window was focused at that moment, so click-to-focus and switched-away detection could target the wrong window. `init` now keeps the existing session file when `source` is `compact`. No settings change needed.
 - `notify` no longer fails when the session file is missing, for example when cc-notifier was installed mid-session. ([#11](https://github.com/trentmcnitt/cc-notifier/issues/11))
 - A missing Hammerspoon no longer crashes `init`; notifications still arrive, without click-to-focus. ([#3](https://github.com/trentmcnitt/cc-notifier/pull/3), [@lamdor](https://github.com/lamdor))
 - A failed local notification no longer prevents the push notification.

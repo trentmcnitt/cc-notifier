@@ -27,6 +27,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 **Purpose**: Capture the currently focused window ID (desktop) or save placeholder (remote)
 **Flow**:
 1. Parse session data from stdin JSON
+   - If `source` is `compact` and the session file already exists: exit without overwriting (keeps the originally captured window; covers users still on matcher `*`)
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
    - If focused app is iTerm2: capture focused iTerm2 session ID via AppleScript for tab-level tracking
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
@@ -97,7 +98,8 @@ All cc-notifier commands receive JSON data via stdin from Claude Code hooks. Hoo
   "session_id": "string",       // Required, always present
   "cwd": "string",              // Current working directory (default: "")
   "hook_event_name": "string",  // Event type (default: "Stop")
-  "message": "string"           // Notification message, e.g. permission prompts (default: "")
+  "message": "string",          // Notification message, e.g. permission prompts (default: "")
+  "source": "string"            // SessionStart only: startup|resume|clear|compact|fork (default: "")
 }
 ```
 Note: Claude Code sends additional fields (e.g., `transcript_path`) that are filtered out by HookData.
