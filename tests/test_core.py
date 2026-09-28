@@ -366,6 +366,52 @@ class TestCoreWorkflows:
         ]
         assert len(terminal_notifier_calls) >= 1
 
+    def test_notify_handles_missing_session_file(self, tmp_path):
+        """Test notify gracefully handles missing session file (init never ran).
+
+        Regression for GitHub issue #11: installing mid-session left no session
+        file, causing FileNotFoundError to crash every Stop hook. Now we fall
+        through to UNAVAILABLE so push still works and the user isn't spammed
+        with error notifications.
+        """
+        test_input = {"session_id": "missing-session", "cwd": "/test/project"}
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        # Intentionally do NOT create the session file
+        log_file = tmp_path / ".cc-notifier" / "cc-notifier.log"
+
+        with (
+            patch.object(cc_notifier, "LOG_FILE", log_file),
+            patch.object(cc_notifier, "SESSION_DIR", session_dir),
+            patch("cc_notifier.get_tmux_session_id", return_value=None),
+            patch("cc_notifier.run_background_command") as mock_bg,
+            patch("cc_notifier.check_idle_and_notify_push") as mock_push,
+            patch(
+                "cc_notifier.PushConfig.from_env",
+                return_value=cc_notifier.PushConfig(token="t", user="u"),
+            ),
+            patch("sys.stdin", StringIO(json.dumps(test_input))),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
+            patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+        ):
+            cc_notifier.main()  # must not raise
+
+        # Push notification path was still reached
+        mock_push.assert_called_once()
+        # Local notification was sent (no tmux, falls through to unconditional send)
+        bg_calls = [call[0][0] for call in mock_bg.call_args_list]
+        terminal_notifier_calls = [
+            cmd
+            for cmd in bg_calls
+            if any("terminal-notifier" in str(arg) for arg in cmd)
+        ]
+        assert len(terminal_notifier_calls) >= 1
+        # No -execute (no original window to focus back to)
+        assert "-execute" not in terminal_notifier_calls[0]
+        # No error was logged
+        if log_file.exists():
+            assert "[ERROR]" not in log_file.read_text()
+
     def test_notify_workflow_user_switched_sends_notification(self, tmp_path):
         """Test notify workflow when user switched: JSON input → file read → real notification."""
         test_input = {"session_id": "notify123", "cwd": "/test/project"}

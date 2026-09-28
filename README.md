@@ -22,16 +22,34 @@ Also enables seamless 📱 mobile development via push notifications.
 # Install dependencies
 brew install --cask hammerspoon
 brew install terminal-notifier
+```
 
-# Configure Hammerspoon (~/.hammerspoon/init.lua)
+**Launch Hammerspoon for the first time and install its CLI** (required — the `hs` command is a shim that talks to a running Hammerspoon, and the symlink doesn't exist until you ask for it):
+
+1. Open Hammerspoon.app (grant Accessibility permission when prompted).
+2. Open the Hammerspoon console (click the menu bar icon → Console).
+3. Run: `hs.ipc.cliInstall()`
+
+Then configure Hammerspoon (`~/.hammerspoon/init.lua`):
+
+```lua
 require("hs.ipc")
 require("hs.window")
 require("hs.window.filter")
 require("hs.timer")
+```
 
-# Reload: hs -c "hs.timer.doAfter(0, hs.reload)"
+Reload Hammerspoon:
 
-# Install cc-notifier
+```bash
+hs -c "hs.timer.doAfter(0, hs.reload)"
+```
+
+> If this command hangs, Hammerspoon isn't running or the CLI wasn't installed — repeat the launch + `hs.ipc.cliInstall()` step above.
+
+Install cc-notifier:
+
+```bash
 git clone https://github.com/trentmcnitt/cc-notifier.git
 cd cc-notifier
 ./install.sh

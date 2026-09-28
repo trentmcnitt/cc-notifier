@@ -40,6 +40,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 **Flow**:
 1. Parse hook data from stdin JSON
 2. Load original window ID and tmux session ID from session file
+   - If session file is missing (init never ran for this session — e.g. installed mid-session, or Claude Code bug #7911 session ID mismatch): fall back to `UNAVAILABLE` window/app, capture current tmux session ID, skip deduplication, and proceed. Local notification path then treats it the same as "Hammerspoon missing"; push still works.
 3. Check deduplication threshold (prevent spam within 2 seconds, preserves tmux session ID)
 4. **Desktop Mode Only**:
    - If window ID is UNAVAILABLE (no Hammerspoon):
