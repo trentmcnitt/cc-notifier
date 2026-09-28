@@ -22,6 +22,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+
+def find_executable(name: str, *fallback_dirs: str) -> str:
+    """Find name on PATH, then in fallback_dirs. Hooks may run with a minimal PATH."""
+    search_path = os.pathsep.join([os.environ.get("PATH", ""), *fallback_dirs])
+    return shutil.which(name, path=search_path) or name
+
+
 # Constants and configuration
 VERSION = "0.4.0"
 SESSION_DIR = Path("/tmp/cc_notifier")
@@ -30,15 +37,11 @@ NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0
 MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-# Resolve via PATH plus both Homebrew prefixes (Apple Silicon and Intel), since
-# hooks may run with a minimal PATH
-TERMINAL_NOTIFIER = (
-    shutil.which(
-        "terminal-notifier",
-        path=f"{os.environ.get('PATH', '')}:/opt/homebrew/bin:/usr/local/bin",
-    )
-    or "terminal-notifier"
+# Homebrew prefixes: Apple Silicon, then Intel
+TERMINAL_NOTIFIER = find_executable(
+    "terminal-notifier", "/opt/homebrew/bin", "/usr/local/bin"
 )
+IOREG = find_executable("ioreg", "/usr/sbin")
 PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
 PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 PUSH_IDLE_CHECK_INTERVALS_ATTACHED = [3, 20]
@@ -950,7 +953,7 @@ def send_pushover_notification(
 def get_macos_idle_time() -> int:
     """Get macOS system idle time in seconds using ioreg."""
     try:
-        output = run_command(["ioreg", "-c", "IOHIDSystem"], timeout=5)
+        output = run_command([IOREG, "-c", "IOHIDSystem"], timeout=5)
         for line in output.splitlines():
             if "HIDIdleTime" in line:
                 idle_nanoseconds = int(line.split("=", 1)[1].strip())

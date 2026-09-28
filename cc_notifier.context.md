@@ -15,6 +15,7 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 - **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, timestamp, tmux session ID, and optional iTerm2 session ID
 - **Window Management**: Hammerspoon CLI for cross-space window focusing
 - **Local Notifications**: terminal-notifier with `-execute` parameter for click actions
+- **Binary Lookup**: `find_executable()` searches PATH, then known dirs (Homebrew prefixes for terminal-notifier, `/usr/sbin` for ioreg), because hooks can run with a minimal PATH
 - **Push Notifications**: Pushover API integration
 
 ## Core Functions

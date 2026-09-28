@@ -28,6 +28,7 @@ All notable changes to cc-notifier are documented here. The format is based on [
 - A failed local notification no longer prevents the push notification.
 - `install.sh` checks that the Hammerspoon CLI actually responds, and its README links point at sections that exist.
 - Quick Start includes the `hs.ipc.cliInstall()` step and a reload command that doesn't hang.
+- The desktop push idle check no longer crashes `notify` when the hook's `PATH` lacks `/usr/sbin`. `ioreg` is now resolved by absolute path, so push notifications from such sessions (e.g. scheduled or headless runs) are delivered again.
 - Tests no longer write to the developer's real `~/.cc-notifier` log.
 
 ## [0.3.0] - 2025-10-23

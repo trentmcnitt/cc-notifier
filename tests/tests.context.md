@@ -8,7 +8,7 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **72 total tests** (63 core + 9 integration) across 2 files - All tests properly accounted for and documented
+**Status**: **73 total tests** (63 core + 10 integration) across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
@@ -98,7 +98,7 @@ Associated with: all tests in the codebase
 
 ---
 
-## test_integrations.py (9 tests) - External System Boundaries & Integration Testing
+## test_integrations.py (10 tests) - External System Boundaries & Integration Testing
 
 ### TestHammerspoonIntegration (1 test) - Consolidated External System Testing
 - `test_hammerspoon_cli_integration` - Hammerspoon CLI success, timeout, and error scenarios - Comprehensive testing of window management integration in a single consolidated test
@@ -116,3 +116,6 @@ Associated with: all tests in the codebase
 ### TestITerm2Integration (2 tests) - iTerm2-Specific Integration Testing
 - `test_is_iterm2_app_detection` - Detects iTerm2 app paths reliably - Gates iTerm2-only tab logic without affecting other apps
 - `test_get_iterm2_focused_session_id` - Captures focused iTerm2 session ID with graceful fallback - Ensures robust tab identity capture for notifications
+
+### TestExecutableLookup (1 test) - Minimal-PATH Binary Resolution
+- `test_find_executable_falls_back_when_path_is_minimal` - find_executable resolves binaries from fallback dirs when PATH lacks them, returns the bare name when not found, and get_macos_idle_time uses the resolved ioreg - Regression for hooks run with a PATH lacking /usr/sbin, where ioreg raised FileNotFoundError and killed the whole notify (including push)
