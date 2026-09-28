@@ -154,6 +154,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 | `PUSHOVER_API_TOKEN`, `PUSHOVER_USER_KEY` | Enable push notifications via Pushover |
 | `CC_NOTIFIER_TITLE_FORMAT` | Custom title for local and push notifications, e.g. `"{hostname}: {dir}"`. When unset, local notifications use "Claude Code 🔔" and push notifications use the directory name. |
 | `CC_NOTIFIER_PUSH_URL` | URL attached to push notifications, e.g. to resume the session on your phone. See [Mobile Development](#-mobile-development). |
+| `CC_NOTIFIER_DISABLE` | Set to `1` to turn every cc-notifier hook into a no-op. Useful for headless or scheduled runs that nobody is watching, e.g. `CC_NOTIFIER_DISABLE=1 claude -p "..."`, or in a project's `.claude/settings.json` `env` block. |
 
 ### Placeholders
 

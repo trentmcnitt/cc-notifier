@@ -2,6 +2,17 @@
 
 All notable changes to cc-notifier are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `CC_NOTIFIER_DISABLE=1` turns every cc-notifier hook into a no-op, so headless or scheduled Claude runs can skip notifications without changing hook config. Now that v0.4.0 no longer crashes under a minimal `PATH`, such runs would otherwise send push notifications.
+
+### Fixed
+
+- `cc-notifier --version` and `--help` through the installed wrapper now print their output. They used to print nothing, because output went to `/dev/null`, and waited on stdin when nothing was piped in.
+- The pip entry point works: `pip install .` then `cc-notifier --version` prints the version instead of the "should not be run directly" error. Hook commands are still guarded.
+
 ## [0.4.0] - 2026-09-27
 
 ### Added
@@ -36,5 +47,6 @@ All notable changes to cc-notifier are documented here. The format is based on [
 
 See the [v0.3.0 release](https://github.com/trentmcnitt/cc-notifier/releases/tag/v0.3.0).
 
+[Unreleased]: https://github.com/trentmcnitt/cc-notifier/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/trentmcnitt/cc-notifier/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/trentmcnitt/cc-notifier/releases/tag/v0.3.0

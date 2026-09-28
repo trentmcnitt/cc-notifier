@@ -703,6 +703,44 @@ class TestCoreWorkflows:
             proc.stdout.close()
             assert proc.returncode == 0
 
+    def test_wrapper_disable_env_skips_hooks(self, tmp_path):
+        """CC_NOTIFIER_DISABLE=1 makes hooks a no-op: Python is never launched."""
+        wrapper_path = Path(__file__).parent.parent / "cc-notifier"
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        fake_python = fake_bin / "python3"
+        fake_python.write_text('#!/bin/sh\ncat >/dev/null\ntouch "$MARKER"\n')
+        fake_python.chmod(0o755)
+        hook_json = '{"session_id":"disable-test","cwd":"/tmp"}'
+
+        def run_wrapper(disable, marker):
+            env = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "CC_NOTIFIER_DISABLE": disable,
+                "MARKER": str(marker),
+            }
+            subprocess.run(
+                [str(wrapper_path), "notify"],
+                input=hook_json,
+                env=env,
+                text=True,
+                timeout=5,
+                check=True,
+            )
+
+        disabled_marker = tmp_path / "disabled-ran"
+        run_wrapper("1", disabled_marker)
+
+        # Control: with the opt-out off, the (fake) Python does run
+        enabled_marker = tmp_path / "enabled-ran"
+        run_wrapper("0", enabled_marker)
+        deadline = time.time() + 5
+        while not enabled_marker.exists() and time.time() < deadline:
+            time.sleep(0.05)
+        assert enabled_marker.exists()
+        assert not disabled_marker.exists()
+
     def test_dedup_preserves_iterm2_session_id(self, tmp_path):
         """check_deduplication must preserve the iTerm2 session ID on rewrite."""
         session_dir = tmp_path / "cc_notifier"

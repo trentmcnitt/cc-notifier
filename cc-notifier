@@ -12,6 +12,12 @@ for arg in "$@"; do
     esac
 done
 
+# Opt-out for headless or scheduled Claude runs: every hook becomes a no-op
+case "${CC_NOTIFIER_DISABLE:-}" in
+    ""|0|false) ;;
+    *) cat >/dev/null; exit 0 ;;
+esac
+
 stdin_data=$(cat)
 export CC_NOTIFIER_WRAPPER=1
 # Get TTY from process table (works even with stdin redirected)

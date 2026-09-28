@@ -85,6 +85,10 @@ Flows are in the order they are executed, and are performed synchronously, unles
 - `main()` handles them before the wrapper guard, so they also work via the pip entry point (`pip install .` → `cc-notifier --version`)
 - Accepted anywhere in argv (e.g. `--debug --version`); print and exit 0
 
+### Opt-out: `CC_NOTIFIER_DISABLE`
+**Purpose**: Let headless or scheduled Claude runs skip notifications without editing hook config
+**Flow**: The bash wrapper checks the variable before reading hook data. Any value except empty, `0`, or `false` drains stdin and exits 0 without launching Python. Hooks inherit Claude Code's environment, so it can be set on the `claude` process or in a settings `env` block.
+
 ### Debug Mode
 **Usage**: Add `--debug` flag to any command (e.g., `cc-notifier --debug notify`)
 **Behavior**:
