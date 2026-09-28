@@ -77,19 +77,7 @@ def main() -> None:
         print("Running directly will block Claude Code execution!", file=sys.stderr)
         sys.exit(1)
 
-    global DEBUG
-    if "--debug" in sys.argv:
-        DEBUG = True
-        sys.argv.remove("--debug")
-
-    icon = ""
-    if "--icon" in sys.argv:
-        idx = sys.argv.index("--icon")
-        if idx + 1 < len(sys.argv):
-            icon = sys.argv[idx + 1]
-            sys.argv.pop(idx + 1)
-        sys.argv.pop(idx)
-
+    icon = parse_flags()
     command = sys.argv[1] if len(sys.argv) > 1 else "help"
     debug_log(f"Command: {command}")
     if command in ("--version", "-v"):
@@ -103,6 +91,23 @@ def main() -> None:
     else:
         show_help()
         sys.exit(1)
+
+
+def parse_flags() -> str:
+    """Strip --debug and --icon <path> from sys.argv. Returns the icon path."""
+    global DEBUG
+    if "--debug" in sys.argv:
+        DEBUG = True
+        sys.argv.remove("--debug")
+
+    icon = ""
+    if "--icon" in sys.argv:
+        idx = sys.argv.index("--icon")
+        if idx + 1 < len(sys.argv):
+            icon = sys.argv[idx + 1]
+            sys.argv.pop(idx + 1)
+        sys.argv.pop(idx)
+    return icon
 
 
 @handle_command_errors("init")
