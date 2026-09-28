@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -29,7 +30,15 @@ NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0
 MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
+# Resolve via PATH plus both Homebrew prefixes (Apple Silicon and Intel), since
+# hooks may run with a minimal PATH
+TERMINAL_NOTIFIER = (
+    shutil.which(
+        "terminal-notifier",
+        path=f"{os.environ.get('PATH', '')}:/opt/homebrew/bin:/usr/local/bin",
+    )
+    or "terminal-notifier"
+)
 PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
 PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 PUSH_IDLE_CHECK_INTERVALS_ATTACHED = [3, 20]

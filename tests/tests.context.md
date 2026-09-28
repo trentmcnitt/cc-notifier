@@ -12,6 +12,8 @@ Associated with: all tests in the codebase
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
+**Shared fixtures** (`tests/conftest.py`): autouse `isolated_log_file` redirects `LOG_FILE` to a per-test tmp path so test runs never write to the developer's real `~/.cc-notifier/cc-notifier.log`.
+
 ---
 
 ## test_core.py (63 tests) - Core Functionality & Essential Business Logic
