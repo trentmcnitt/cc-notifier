@@ -8,7 +8,7 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **74 total tests** (64 core + 10 integration) across 2 files - All tests properly accounted for and documented
+**Status**: **77 total tests** (67 core + 10 integration) across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
@@ -16,9 +16,9 @@ Associated with: all tests in the codebase
 
 ---
 
-## test_core.py (64 tests) - Core Functionality & Essential Business Logic
+## test_core.py (67 tests) - Core Functionality & Essential Business Logic
 
-### TestCLIInterface (9 tests) - Essential CLI Contract Testing
+### TestCLIInterface (10 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
 - `test_main_with_invalid_command_exits_with_error` - CLI error handling for unknown commands - Prevents silent failures and provides user guidance
 - `test_main_version_flag_shows_version` - Version display functionality with --version and -v flags - Essential for troubleshooting and system compatibility
@@ -26,10 +26,11 @@ Associated with: all tests in the codebase
 - `test_debug_flag_parsing` - Debug flag detection, removal from argv, and state setting - Tests actual main() function behavior with debug flag
 - `test_main_exception_logged_and_exits_1` - Main function error logging and exit code 1 - Essential for Claude Code hook error detection and debugging
 - `test_notify_continues_to_push_when_local_fails` - Notify gracefully handles local notification failure and continues to push - Essential for resilient notification delivery
-- `test_main_blocks_direct_execution_without_wrapper_env` - Prevents direct execution without wrapper environment variable - Critical for preventing Claude Code hooks from blocking
+- `test_main_blocks_direct_execution_without_wrapper_env` - Blocks hook commands (e.g. notify) without the wrapper environment variable - Critical for preventing Claude Code hooks from blocking
+- `test_version_and_help_work_without_wrapper` - --version/-v/--help work without the wrapper env var, including after --debug - Keeps the pip entry point usable
 - `test_main_allows_execution_with_wrapper_env` - Allows execution when wrapper environment variable is set - Ensures proper wrapper integration works correctly
 
-### TestCoreWorkflows (17 tests) - End-to-End Workflow Validation
+### TestCoreWorkflows (19 tests) - End-to-End Workflow Validation
 - `test_init_workflow_captures_and_saves_window` - Complete init workflow from JSON input to file creation including tmux session ID - End-to-end validation of session initialization
 - `test_init_compact_keeps_original_window` - Init with source=compact leaves an existing session file untouched, but still creates one when missing - Prevents compaction from recording the wrong window for click-to-focus and switched-away detection
 - `test_init_workflow_without_hammerspoon` - Init falls back to UNAVAILABLE but still captures tmux session ID - Validates graceful degradation
@@ -42,6 +43,8 @@ Associated with: all tests in the codebase
 - `test_notify_workflow_user_stayed_no_notification` - Complete notify workflow when user stayed on same window - End-to-end validation of intelligent notification suppression
 - `test_cleanup_workflow_removes_session` - Complete cleanup workflow with age-based file removal - End-to-end validation of session cleanup functionality
 - `test_wrapper_performance` - Bash wrapper returns immediately without waiting for Python - Critical for non-blocking hook execution in Claude Code
+- `test_wrapper_info_commands_print_without_reading_stdin` - --version/--help through the wrapper print output and exit even with an open, empty stdin - Previously printed nothing (output went to /dev/null) and blocked on stdin
+- `test_wrapper_disable_env_skips_hooks` - CC_NOTIFIER_DISABLE=1 exits before launching Python (a fake python3 on PATH never runs), with a CC_NOTIFIER_DISABLE=0 control run that does launch it - Lets headless or scheduled runs opt out of notifications
 - `test_notify_sent_when_same_window_but_tmux_detached` - Notify sends notification when same window but user switched tmux sessions - Detects intra-window tmux session switches
 - `test_notify_sent_when_same_iterm2_window_but_different_tab` - Notify sends local notification when iTerm2 tab changed in same window - Enables tab-level away detection in iTerm2
 - `test_dedup_preserves_iterm2_session_id` - check_deduplication preserves iTerm2 session ID on timestamp rewrite - Prevents silent loss of tab restore on second-and-later notifications

@@ -61,6 +61,18 @@ class TestCLIInterface:
             captured = capsys.readouterr()
             assert f"cc-notifier {cc_notifier.VERSION}" in captured.out
 
+    def test_version_and_help_work_without_wrapper(self, capsys, monkeypatch):
+        """--version/--help work via the pip entry point (no wrapper env var)."""
+        monkeypatch.delenv("CC_NOTIFIER_WRAPPER", raising=False)
+        for argv, expected in [
+            (["cc-notifier", "--version"], f"cc-notifier {cc_notifier.VERSION}"),
+            (["cc-notifier", "--debug", "-v"], f"cc-notifier {cc_notifier.VERSION}"),
+            (["cc-notifier", "--help"], "Usage:"),
+        ]:
+            with patch.object(sys, "argv", argv):
+                cc_notifier.main()  # Returns normally: no guard error, no exit(1)
+            assert expected in capsys.readouterr().out
+
     def test_main_exception_handling_exits_with_status_1(self):
         """Test main() catches exceptions and exits with status 1."""
         with (
@@ -173,10 +185,10 @@ class TestCLIInterface:
         mock_push.assert_called_once()
 
     def test_main_blocks_direct_execution_without_wrapper_env(self, capsys):
-        """Test main() blocks execution without CC_NOTIFIER_WRAPPER environment variable."""
+        """Test main() blocks hook commands without CC_NOTIFIER_WRAPPER env var."""
         with (
             pytest.raises(SystemExit) as exc_info,
-            patch.object(sys, "argv", ["cc-notifier", "--version"]),
+            patch.object(sys, "argv", ["cc-notifier", "notify"]),
             patch.dict(os.environ, {}, clear=True),  # Clear environment
         ):
             cc_notifier.main()
@@ -665,6 +677,69 @@ class TestCoreWorkflows:
         assert duration_ms < MAX_WRAPPER_DURATION_MS, (
             f"Wrapper took {duration_ms:.1f}ms, expected <{MAX_WRAPPER_DURATION_MS}ms"
         )
+
+    def test_wrapper_info_commands_print_without_reading_stdin(self):
+        """--version/--help through the wrapper print output and don't wait on stdin."""
+        wrapper_path = Path(__file__).parent.parent / "cc-notifier"
+        for flag, expected in [
+            ("--version", cc_notifier.VERSION),
+            ("--help", "Usage:"),
+        ]:
+            # stdin stays open and empty, like a terminal with nothing piped in
+            proc = subprocess.Popen(
+                [str(wrapper_path), flag],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                proc.wait(timeout=5)
+            finally:
+                proc.kill()
+                assert proc.stdin is not None
+                proc.stdin.close()
+            assert proc.stdout is not None
+            assert expected in proc.stdout.read()
+            proc.stdout.close()
+            assert proc.returncode == 0
+
+    def test_wrapper_disable_env_skips_hooks(self, tmp_path):
+        """CC_NOTIFIER_DISABLE=1 makes hooks a no-op: Python is never launched."""
+        wrapper_path = Path(__file__).parent.parent / "cc-notifier"
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        fake_python = fake_bin / "python3"
+        fake_python.write_text('#!/bin/sh\ncat >/dev/null\ntouch "$MARKER"\n')
+        fake_python.chmod(0o755)
+        hook_json = '{"session_id":"disable-test","cwd":"/tmp"}'
+
+        def run_wrapper(disable, marker):
+            env = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "CC_NOTIFIER_DISABLE": disable,
+                "MARKER": str(marker),
+            }
+            subprocess.run(
+                [str(wrapper_path), "notify"],
+                input=hook_json,
+                env=env,
+                text=True,
+                timeout=5,
+                check=True,
+            )
+
+        disabled_marker = tmp_path / "disabled-ran"
+        run_wrapper("1", disabled_marker)
+
+        # Control: with the opt-out off, the (fake) Python does run
+        enabled_marker = tmp_path / "enabled-ran"
+        run_wrapper("0", enabled_marker)
+        deadline = time.time() + 5
+        while not enabled_marker.exists() and time.time() < deadline:
+            time.sleep(0.05)
+        assert enabled_marker.exists()
+        assert not disabled_marker.exists()
 
     def test_dedup_preserves_iterm2_session_id(self, tmp_path):
         """check_deduplication must preserve the iTerm2 session ID on rewrite."""

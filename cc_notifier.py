@@ -79,6 +79,16 @@ def handle_command_errors(
 def main() -> None:
     """Main entry point for cc-notifier command."""
 
+    # Informational commands don't read stdin, so they're safe to run directly
+    # (e.g. via the pip entry point)
+    args = set(sys.argv[1:])
+    if args & {"--version", "-v"}:
+        print(f"cc-notifier {VERSION}")
+        return
+    if args & {"--help", "-h", "help"}:
+        show_help()
+        return
+
     # Guard against direct execution in hooks
     if not os.getenv("CC_NOTIFIER_WRAPPER"):
         print(
@@ -92,9 +102,7 @@ def main() -> None:
     icon = parse_flags()
     command = sys.argv[1] if len(sys.argv) > 1 else "help"
     debug_log(f"Command: {command}")
-    if command in ("--version", "-v"):
-        print(f"cc-notifier {VERSION}")
-    elif command == "init":
+    if command == "init":
         cmd_init()
     elif command == "notify":
         cmd_notify(icon=icon)
@@ -221,13 +229,14 @@ def show_help() -> None:
     """Display help information."""
     print(f"""cc-notifier {VERSION}
 
-Usage: cc-notifier [--debug] [--icon <path>] {{init|notify|cleanup|--version}}
+Usage: cc-notifier [--debug] [--icon <path>] {{init|notify|cleanup|--version|--help}}
 
 Commands:
   init     - Initialize session (capture focused window)
   notify   - Send notification if user switched away (local + push)
   cleanup  - Clean up session files
   --version - Show version information
+  --help   - Show this help
 
 Options:
   --debug         - Enable debug logging with timestamps
