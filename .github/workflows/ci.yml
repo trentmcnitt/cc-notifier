@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - run: pip install ruff mypy vulture
+      - name: ruff format
+        run: ruff format --check *.py tests/
+      - name: ruff check
+        run: ruff check *.py tests/
+      - name: mypy
+        run: mypy *.py
+      - name: vulture
+        run: vulture *.py tests/ --min-confidence 70
+      - name: shellcheck
+        run: shellcheck --severity=info --enable=all *.sh mobile/*.sh
+
+  test:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest
+      - run: python -m pytest

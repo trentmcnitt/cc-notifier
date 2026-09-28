@@ -1,5 +1,9 @@
 # cc-notifier 🔔
 
+[![CI](https://github.com/trentmcnitt/cc-notifier/actions/workflows/ci.yml/badge.svg)](https://github.com/trentmcnitt/cc-notifier/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](pyproject.toml)
+
 **Smart Notifications for Claude Code on Desktop and Mobile**
 
 Click notifications to instantly restore your exact Claude Code context across macOS Spaces—not just the app, but your specific terminal/IDE window (and iTerm2 tab when available).
