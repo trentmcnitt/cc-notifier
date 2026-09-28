@@ -22,7 +22,7 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 Flows are in the order they are executed, and are performed synchronously, unless otherwise noted.
 
 ### `cc-notifier init`
-**Trigger**: Claude Code SessionStart hook (Runs when Claude Code starts a new session or resumes an existing session)
+**Trigger**: Claude Code SessionStart hook with matcher `startup|resume|clear|fork` (Runs when Claude Code starts, resumes, clears, or forks a session). `compact` is deliberately excluded: re-running init after compaction would overwrite the stored window with whatever happens to be focused at that moment
 **Purpose**: Capture the currently focused window ID (desktop) or save placeholder (remote)
 **Flow**:
 1. Parse session data from stdin JSON

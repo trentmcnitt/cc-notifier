@@ -228,19 +228,20 @@ Options:
 Example ~/.claude/settings.json hook configuration:
 
   Basic (no icon):
-    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+    "Stop": [{{"hooks": [{{"type": "command",
       "command": "$HOME/.cc-notifier/cc-notifier notify"}}]}}]
 
   With custom icon:
-    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+    "Stop": [{{"hooks": [{{"type": "command",
       "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}]
 
   Full example (SessionStart + Stop + Notification + SessionEnd):
     {{
       "hooks": {{
-        "SessionStart": [{{"matcher": "*", "hooks": [{{"type": "command",
+        "SessionStart": [{{"matcher": "startup|resume|clear|fork",
+          "hooks": [{{"type": "command",
           "command": "$HOME/.cc-notifier/cc-notifier init"}}]}}],
-        "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+        "Stop": [{{"hooks": [{{"type": "command",
           "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}],
         "Notification": [{{"matcher": "permission_prompt|elicitation_dialog",
           "hooks": [{{"type": "command",

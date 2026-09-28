@@ -70,7 +70,7 @@ Add to `~/.claude/settings.json`:
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "*",
+        "matcher": "startup|resume|clear|fork",
         "hooks": [
           {
             "type": "command",
@@ -81,7 +81,6 @@ Add to `~/.claude/settings.json`:
     ],
     "Stop": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -120,6 +119,10 @@ Add to `~/.claude/settings.json`:
   }
 }
 ```
+
+**Why the SessionStart matcher lists sources:** `init` records whichever window is focused when it runs. SessionStart also fires on `compact` (auto or manual compaction), and if that happens while you're in another window, cc-notifier would remember the wrong window. The matcher covers every source except `compact`. Keep `fork`: a forked session is a new session and needs its own `init`.
+
+`Stop` doesn't support matchers, so it has none. For the `Notification` hook, other useful matcher values include `idle_prompt` and `elicitation_url_dialog` (see the [hooks reference](https://code.claude.com/docs/en/hooks)).
 
 ## How It Works
 
@@ -197,7 +200,7 @@ Enable detailed logging for troubleshooting:
 {
   "hooks": {
     "SessionStart": [{
-      "matcher": "*",
+      "matcher": "startup|resume|clear|fork",
       "hooks": [{
         "type": "command",
         "command": "$HOME/.cc-notifier/cc-notifier --debug init"
