@@ -28,7 +28,7 @@ When Claude Code finishes a task and you're away from your computer:
 ## Prerequisites
 
 ### Required
-- **Remote server** with SSH access (your desktop Mac or a dedicated server)
+- **Remote machine** with SSH access, typically your desktop Mac. `install.sh` currently requires the macOS desktop dependencies (Hammerspoon, terminal-notifier), so the installer doesn't support non-Mac servers yet.
 - **[mosh](https://github.com/mobile-shell/mosh)** server installed on remote machine
 - **[tmux](https://github.com/tmux/tmux)** installed on remote machine
 - **[Blink Shell](https://github.com/blinksh/blink)** iOS app (supports mosh and URL schemes)

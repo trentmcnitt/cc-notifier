@@ -63,3 +63,5 @@ The implemented solution uses a simple 3-step workflow:
 2. **Space Detection Limits** - Hammerspoon may not find windows in long-inactive spaces
 3. **No User Feedback** - Failed focus attempts provide no indication to user
 4. **Dependency Sensitivity** - Requires Hammerspoon installation and proper configuration
+
+**Status as of v0.4.0:** #1 and #3 are partly addressed. A failed focus now shows a Hammerspoon notification ("Could not restore window focus...") instead of failing silently, though there's still no fallback focus strategy. #4 is softened: without Hammerspoon, cc-notifier still sends notifications, just without click-to-focus.

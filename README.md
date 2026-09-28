@@ -1,24 +1,48 @@
 # cc-notifier 🔔
 
 [![CI](https://github.com/trentmcnitt/cc-notifier/actions/workflows/ci.yml/badge.svg)](https://github.com/trentmcnitt/cc-notifier/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/trentmcnitt/cc-notifier)](https://github.com/trentmcnitt/cc-notifier/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](pyproject.toml)
 
-**Smart Notifications for Claude Code on Desktop and Mobile**
+**Notifications for [Claude Code](https://code.claude.com/docs/en/overview) that take you back to the exact window you left.**
 
-Click notifications to instantly restore your exact Claude Code context across macOS Spaces—not just the app, but your specific terminal/IDE window (and iTerm2 tab when available).
-
-Also enables seamless 📱 mobile development via push notifications.
+When Claude Code finishes a task or needs your permission while you're working in another window, cc-notifier shows a macOS notification. Click it and you're back in the original terminal or IDE window, even on another Space (and the same tab, in iTerm2). Away from your desk? It sends a push notification to your phone instead, which can reopen the session there.
 
 <img src="img/macos-notification.png" alt="cc-notifier macOS notification: click it to return to the original Claude Code window" width="420">
 
 ## Features
 
-- **🎯 Click-to-Focus** - Restore exact window across Spaces, not just the app. With iTerm2, cc-notifier also restores the original tab/session within that window.
-- **🧠 Intelligent Detection** - 💻 Desktop: notifies when you switch windows | 🌐 Remote: notifies when idle
-- **⚡ Fast & Async** - Runs in background, never blocks Claude Code
-- **📲 Push Notifications** - Desktop: optional idle alerts | Remote: primary notification method (Pushover)
-- **📱 Mobile Handoff** - (Optional) Desktop→phone workflow via Blink Shell
+- **🎯 Click-to-focus across Spaces.** Returns you to the exact window, not just the app, and to the original iTerm2 tab.
+- **🧠 Only when you've looked away.** Local notifications fire only if you switched windows, iTerm2 tabs, or tmux sessions. Over SSH, cc-notifier checks whether you're idle instead.
+- **📲 Push when you're away.** Optional Pushover notifications when you've been idle at your desk; the main channel over SSH.
+- **📱 Phone handoff (optional).** Tap the push notification to resume the same session in Blink Shell.
+- **⚡ Never blocks Claude Code.** Hooks return immediately and the work runs in the background.
+- **🪶 Small and dependency-free.** One standard-library Python file plus a bash wrapper, tested in CI on Python 3.9 through 3.14.
+
+## How It Works
+
+### 💻 Desktop Mode
+
+1. **Session Start** → Captures your focused window ID
+2. **Task Completion** → Compares current window vs original window
+3. **Smart Notification:**
+   - 🪟 **Switched windows?** → Local notification with click-to-focus
+   - 🗂️ **Switched iTerm2 tabs in same window?** → Local notification with tab-aware click-to-focus
+   - 💤 **Idle at desk?** → Optional push notification via Pushover
+4. **Click Notification** → Hammerspoon restores your exact window across Spaces; iTerm2 sessions also restore the original tab
+
+### 🌐 Remote Mode (SSH)
+
+1. **Auto-Detection** → Detects SSH via `SSH_CONNECTION` environment variable
+2. **Session Start** → Skips window tracking (uses placeholder)
+3. **Task Completion** → Checks TTY idle time (st_atime)
+4. **Smart Notification:**
+   - 💤 **User idle?** → Push notification with resume URL
+   - ⚡ **User active?** → No notification
+5. **Tap Notification** → Pushover opens → Tap URL → Blink Shell auto-resumes session
+
+**🔧 Tested Stack:** [Tailscale](https://github.com/tailscale/tailscale) + [mosh](https://github.com/mobile-shell/mosh) + [tmux](https://github.com/tmux/tmux) + [Blink Shell](https://github.com/blinksh/blink)
 
 ## Requirements
 
@@ -168,30 +192,6 @@ Both `CC_NOTIFIER_TITLE_FORMAT` and `CC_NOTIFIER_PUSH_URL` accept these:
 | `{env:VAR}` | Value of environment variable `VAR` (empty if unset) |
 | `{session_id}` | Claude Code session ID (`CC_NOTIFIER_PUSH_URL` only) |
 
-## How It Works
-
-### 💻 Desktop Mode
-
-1. **Session Start** → Captures your focused window ID
-2. **Task Completion** → Compares current window vs original window
-3. **Smart Notification:**
-   - 🪟 **Switched windows?** → Local notification with click-to-focus
-   - 🗂️ **Switched iTerm2 tabs in same window?** → Local notification with tab-aware click-to-focus
-   - 💤 **Idle at desk?** → Optional push notification via Pushover
-4. **Click Notification** → Hammerspoon restores your exact window across Spaces; iTerm2 sessions also restore the original tab
-
-### 🌐 Remote Mode (SSH)
-
-1. **Auto-Detection** → Detects SSH via `SSH_CONNECTION` environment variable
-2. **Session Start** → Skips window tracking (uses placeholder)
-3. **Task Completion** → Checks TTY idle time (st_atime)
-4. **Smart Notification:**
-   - 💤 **User idle?** → Push notification with resume URL
-   - ⚡ **User active?** → No notification
-5. **Tap Notification** → Pushover opens → Tap URL → Blink Shell auto-resumes session
-
-**🔧 Tested Stack:** [Tailscale](https://github.com/tailscale/tailscale) + [mosh](https://github.com/mobile-shell/mosh) + [tmux](https://github.com/tmux/tmux) + [Blink Shell](https://github.com/blinksh/blink)
-
 ## 📱 Mobile Development
 
 **Start coding on your desktop, continue seamlessly on your phone.**
@@ -303,9 +303,9 @@ pre-commit install
 make check  # format, lint, typecheck, test
 ```
 
-Contributing: Fork, `make check`, test, PR.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow.
 
-**Project structure:**
+**Installed layout:**
 ```
 ~/.cc-notifier/         # Installation
 ├── cc-notifier         # Entry point
