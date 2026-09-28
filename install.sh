@@ -97,8 +97,8 @@ echo
 echo "1. 🔧 CONFIGURE HAMMERSPOON (Required)"
 echo "2. ⚙️  ADD TO CLAUDE CODE HOOKS (Required)"
 echo
-echo "📖 See README for complete configuration details:"
-echo "   https://github.com/trentmcnitt/cc-notifier#installation"
+echo "📖 Hammerspoon setup: README → Quick Start. Hooks: README → Configuration."
+echo "   https://github.com/trentmcnitt/cc-notifier#quick-start"
 echo
 echo "cc-notifier will not work until both steps are completed!"
 
