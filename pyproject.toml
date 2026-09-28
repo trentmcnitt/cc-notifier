@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cc-notifier"
-version = "0.3.0"
+version = "0.4.0"
 description = "macOS notification system for Claude Code hooks with intelligent window management"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Tools",
     "Topic :: System :: System Shells",
 ]
@@ -100,7 +101,7 @@ skip-magic-trailing-comma = false
 # MYPY CONFIGURATION - Type Checking
 # ============================================================================
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"  # Oldest mypy accepts; CI runs tests on 3.9
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

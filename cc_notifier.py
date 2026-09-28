@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -21,15 +22,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+
+def find_executable(name: str, *fallback_dirs: str) -> str:
+    """Find name on PATH, then in fallback_dirs. Hooks may run with a minimal PATH."""
+    search_path = os.pathsep.join([os.environ.get("PATH", ""), *fallback_dirs])
+    return shutil.which(name, path=search_path) or name
+
+
 # Constants and configuration
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 SESSION_DIR = Path("/tmp/cc_notifier")
 CLEANUP_AGE_SECONDS = 5 * 24 * 60 * 60
 NOTIFICATION_DEDUPLICATION_THRESHOLD_SECONDS = 2.0
 MAX_LOG_LINES = 2250  # Trigger trim when exceeded
 TRIM_TO_LINES = 1250  # Keep newest lines after trim
 HAMMERSPOON_CLI = "/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs"
-TERMINAL_NOTIFIER = "/opt/homebrew/bin/terminal-notifier"
+# Homebrew prefixes: Apple Silicon, then Intel
+TERMINAL_NOTIFIER = find_executable(
+    "terminal-notifier", "/opt/homebrew/bin", "/usr/local/bin"
+)
+IOREG = find_executable("ioreg", "/usr/sbin")
 PUSH_IDLE_CHECK_INTERVALS_DESKTOP = [3, 20]
 PUSH_IDLE_CHECK_INTERVALS_REMOTE = [4]
 PUSH_IDLE_CHECK_INTERVALS_ATTACHED = [3, 20]
@@ -77,19 +89,7 @@ def main() -> None:
         print("Running directly will block Claude Code execution!", file=sys.stderr)
         sys.exit(1)
 
-    global DEBUG
-    if "--debug" in sys.argv:
-        DEBUG = True
-        sys.argv.remove("--debug")
-
-    icon = ""
-    if "--icon" in sys.argv:
-        idx = sys.argv.index("--icon")
-        if idx + 1 < len(sys.argv):
-            icon = sys.argv[idx + 1]
-            sys.argv.pop(idx + 1)
-        sys.argv.pop(idx)
-
+    icon = parse_flags()
     command = sys.argv[1] if len(sys.argv) > 1 else "help"
     debug_log(f"Command: {command}")
     if command in ("--version", "-v"):
@@ -105,10 +105,32 @@ def main() -> None:
         sys.exit(1)
 
 
+def parse_flags() -> str:
+    """Strip --debug and --icon <path> from sys.argv. Returns the icon path."""
+    global DEBUG
+    if "--debug" in sys.argv:
+        DEBUG = True
+        sys.argv.remove("--debug")
+
+    icon = ""
+    if "--icon" in sys.argv:
+        idx = sys.argv.index("--icon")
+        if idx + 1 < len(sys.argv):
+            icon = sys.argv[idx + 1]
+            sys.argv.pop(idx + 1)
+        sys.argv.pop(idx)
+    return icon
+
+
 @handle_command_errors("init")
 def cmd_init() -> None:
     """Initialize session by capturing focused window ID and app path."""
     hook_data = HookData.from_stdin()
+    # Compaction isn't a new session: keep the originally captured window instead
+    # of recording whatever happens to be focused mid-task
+    if hook_data.source == "compact" and (SESSION_DIR / hook_data.session_id).exists():
+        debug_log("Compaction: keeping existing session file")
+        return
     iterm2_session_id = ""
     if is_remote_session():
         window_id, app_path = "REMOTE", "REMOTE"
@@ -214,19 +236,20 @@ Options:
 Example ~/.claude/settings.json hook configuration:
 
   Basic (no icon):
-    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+    "Stop": [{{"hooks": [{{"type": "command",
       "command": "$HOME/.cc-notifier/cc-notifier notify"}}]}}]
 
   With custom icon:
-    "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+    "Stop": [{{"hooks": [{{"type": "command",
       "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}]
 
   Full example (SessionStart + Stop + Notification + SessionEnd):
     {{
       "hooks": {{
-        "SessionStart": [{{"matcher": "*", "hooks": [{{"type": "command",
+        "SessionStart": [{{"matcher": "startup|resume|clear|fork",
+          "hooks": [{{"type": "command",
           "command": "$HOME/.cc-notifier/cc-notifier init"}}]}}],
-        "Stop": [{{"matcher": "*", "hooks": [{{"type": "command",
+        "Stop": [{{"hooks": [{{"type": "command",
           "command": "$HOME/.cc-notifier/cc-notifier notify --icon $HOME/.claude/hooks/my-icon.png"}}]}}],
         "Notification": [{{"matcher": "permission_prompt|elicitation_dialog",
           "hooks": [{{"type": "command",
@@ -253,13 +276,14 @@ class HookData:
     cwd: str = ""
     hook_event_name: str = "Stop"
     message: str = ""
+    source: str = ""  # SessionStart only: startup, resume, clear, compact, fork
 
     @classmethod
     def from_stdin(cls) -> "HookData":
         """Parse hook data from JSON stdin input."""
         try:
             data = json.loads(sys.stdin.read())
-            valid_fields = {"session_id", "cwd", "hook_event_name", "message"}
+            valid_fields = {"session_id", "cwd", "hook_event_name", "message", "source"}
             filtered_data = {k: v for k, v in data.items() if k in valid_fields and v}
             hook_data = cls(**filtered_data)
             debug_log(f"Hook: {hook_data.session_id}, {hook_data.hook_event_name}")
@@ -935,7 +959,7 @@ def send_pushover_notification(
 def get_macos_idle_time() -> int:
     """Get macOS system idle time in seconds using ioreg."""
     try:
-        output = run_command(["ioreg", "-c", "IOHIDSystem"], timeout=5)
+        output = run_command([IOREG, "-c", "IOHIDSystem"], timeout=5)
         for line in output.splitlines():
             if "HIDIdleTime" in line:
                 idle_nanoseconds = int(line.split("=", 1)[1].strip())

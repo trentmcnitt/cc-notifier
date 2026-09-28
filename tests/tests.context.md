@@ -8,13 +8,15 @@ Associated with: all tests in the codebase
 
 **Format**: `test_name` - [concise description of what's being tested] - [rationale for why test is needed]
 
-**Status**: **72 total tests** (63 core + 9 integration) across 2 files - All tests properly accounted for and documented
+**Status**: **74 total tests** (64 core + 10 integration) across 2 files - All tests properly accounted for and documented
 
 **Structure**: Tests are organized by functionality and concerns, emphasizing behavior-focused testing over implementation details. The 2-file structure matches the natural architectural boundary between core logic and external system integration.
 
+**Shared fixtures** (`tests/conftest.py`): autouse `isolated_log_file` redirects `LOG_FILE` to a per-test tmp path so test runs never write to the developer's real `~/.cc-notifier/cc-notifier.log`.
+
 ---
 
-## test_core.py (63 tests) - Core Functionality & Essential Business Logic
+## test_core.py (64 tests) - Core Functionality & Essential Business Logic
 
 ### TestCLIInterface (9 tests) - Essential CLI Contract Testing
 - `test_main_with_no_args_exits_with_error` - CLI error handling when no command provided - CLI must provide helpful usage info and exit gracefully
@@ -27,8 +29,9 @@ Associated with: all tests in the codebase
 - `test_main_blocks_direct_execution_without_wrapper_env` - Prevents direct execution without wrapper environment variable - Critical for preventing Claude Code hooks from blocking
 - `test_main_allows_execution_with_wrapper_env` - Allows execution when wrapper environment variable is set - Ensures proper wrapper integration works correctly
 
-### TestCoreWorkflows (16 tests) - End-to-End Workflow Validation
+### TestCoreWorkflows (17 tests) - End-to-End Workflow Validation
 - `test_init_workflow_captures_and_saves_window` - Complete init workflow from JSON input to file creation including tmux session ID - End-to-end validation of session initialization
+- `test_init_compact_keeps_original_window` - Init with source=compact leaves an existing session file untouched, but still creates one when missing - Prevents compaction from recording the wrong window for click-to-focus and switched-away detection
 - `test_init_workflow_without_hammerspoon` - Init falls back to UNAVAILABLE but still captures tmux session ID - Validates graceful degradation
 - `test_init_workflow_captures_iterm2_session_id` - Init captures iTerm2 focused session ID alongside window metadata - Enables same-window tab restoration for iTerm2
 - `test_notify_suppressed_when_tmux_attached_without_hammerspoon` - Notify suppresses local notification when tmux session is attached - Prevents false positives in tmux
@@ -96,7 +99,7 @@ Associated with: all tests in the codebase
 
 ---
 
-## test_integrations.py (9 tests) - External System Boundaries & Integration Testing
+## test_integrations.py (10 tests) - External System Boundaries & Integration Testing
 
 ### TestHammerspoonIntegration (1 test) - Consolidated External System Testing
 - `test_hammerspoon_cli_integration` - Hammerspoon CLI success, timeout, and error scenarios - Comprehensive testing of window management integration in a single consolidated test
@@ -114,3 +117,6 @@ Associated with: all tests in the codebase
 ### TestITerm2Integration (2 tests) - iTerm2-Specific Integration Testing
 - `test_is_iterm2_app_detection` - Detects iTerm2 app paths reliably - Gates iTerm2-only tab logic without affecting other apps
 - `test_get_iterm2_focused_session_id` - Captures focused iTerm2 session ID with graceful fallback - Ensures robust tab identity capture for notifications
+
+### TestExecutableLookup (1 test) - Minimal-PATH Binary Resolution
+- `test_find_executable_falls_back_when_path_is_minimal` - find_executable resolves binaries from fallback dirs when PATH lacks them, returns the bare name when not found, and get_macos_idle_time uses the resolved ioreg - Regression for hooks run with a PATH lacking /usr/sbin, where ioreg raised FileNotFoundError and killed the whole notify (including push)

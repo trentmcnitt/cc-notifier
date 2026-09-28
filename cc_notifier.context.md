@@ -15,6 +15,7 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 - **Session Files**: `/tmp/cc_notifier/{session_id}` containing window ID, app path, timestamp, tmux session ID, and optional iTerm2 session ID
 - **Window Management**: Hammerspoon CLI for cross-space window focusing
 - **Local Notifications**: terminal-notifier with `-execute` parameter for click actions
+- **Binary Lookup**: `find_executable()` searches PATH, then known dirs (Homebrew prefixes for terminal-notifier, `/usr/sbin` for ioreg), because hooks can run with a minimal PATH
 - **Push Notifications**: Pushover API integration
 
 ## Core Functions
@@ -22,10 +23,11 @@ Primarily a high-level architectural reference, not a detailed implementation gu
 Flows are in the order they are executed, and are performed synchronously, unless otherwise noted.
 
 ### `cc-notifier init`
-**Trigger**: Claude Code SessionStart hook (Runs when Claude Code starts a new session or resumes an existing session)
+**Trigger**: Claude Code SessionStart hook with matcher `startup|resume|clear|fork` (Runs when Claude Code starts, resumes, clears, or forks a session). `compact` is deliberately excluded: re-running init after compaction would overwrite the stored window with whatever happens to be focused at that moment
 **Purpose**: Capture the currently focused window ID (desktop) or save placeholder (remote)
 **Flow**:
 1. Parse session data from stdin JSON
+   - If `source` is `compact` and the session file already exists: exit without overwriting (keeps the originally captured window; covers users still on matcher `*`)
 2. **Desktop Mode**: Get focused window ID via Hammerspoon CLI (`hs.window.focusedWindow()`)
    - If focused app is iTerm2: capture focused iTerm2 session ID via AppleScript for tab-level tracking
    **Remote Mode**: Use placeholder "REMOTE" (auto-detected via SSH environment variables)
@@ -77,7 +79,7 @@ Flows are in the order they are executed, and are performed synchronously, unles
 4. Exit
 
 ### `cc-notifier --version` / `cc-notifier -v`
-**Purpose**: Display current version (0.3.0)
+**Purpose**: Display current version (0.4.0)
 **Flow**: Print version string and exit
 
 ### Debug Mode
@@ -96,7 +98,8 @@ All cc-notifier commands receive JSON data via stdin from Claude Code hooks. Hoo
   "session_id": "string",       // Required, always present
   "cwd": "string",              // Current working directory (default: "")
   "hook_event_name": "string",  // Event type (default: "Stop")
-  "message": "string"           // Notification message, e.g. permission prompts (default: "")
+  "message": "string",          // Notification message, e.g. permission prompts (default: "")
+  "source": "string"            // SessionStart only: startup|resume|clear|compact|fork (default: "")
 }
 ```
 Note: Claude Code sends additional fields (e.g., `transcript_path`) that are filtered out by HookData.

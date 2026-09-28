@@ -103,6 +103,7 @@ cc-notifier/
 ├── install.sh                   # Installation script with dependency setup
 ├── uninstall.sh                 # Clean uninstallation script
 ├── tests/
+│   ├── conftest.py              # Shared fixtures (isolates the log file)
 │   ├── test_core.py             # Core functionality and workflow tests
 │   ├── test_integrations.py     # External system integration tests
 │   └── tests.context.md         # Testing context documentation
@@ -110,10 +111,13 @@ cc-notifier/
 │   ├── README.md
 │   ├── mosh-cc-resume.sh
 │   └── tmux-idle-cleanup.sh
+├── .github/workflows/ci.yml     # CI: lint + tests on Python 3.9-3.14
 ├── pyproject.toml               # Modern Python project configuration
 ├── Makefile                     # Development workflow commands
 ├── .pre-commit-config.yaml      # Quality enforcement hooks
 ├── README.md                    # Project documentation
+├── CHANGELOG.md                 # Release notes
+├── LICENSE                      # MIT
 ├── CLAUDE.md                    # Claude Code development guidance
 └── .gitignore                   # Git ignore patterns
 ```

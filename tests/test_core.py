@@ -232,6 +232,35 @@ class TestCoreWorkflows:
         assert lines[2] == "0"
         assert lines[3] == "$20"  # tmux session ID captured
 
+    def test_init_compact_keeps_original_window(self, tmp_path):
+        """Compaction must not overwrite the window captured at session start."""
+        session_dir = tmp_path / "cc_notifier"
+        session_dir.mkdir()
+        session_file = session_dir / "compact123"
+        session_file.write_text("111\n/Applications/iTerm.app\n0\n\n")
+
+        def run_init(session_id):
+            test_input = {"session_id": session_id, "source": "compact"}
+            with (
+                patch(
+                    "cc_notifier.get_focused_window_id",
+                    return_value=("999", "/Applications/Safari.app"),
+                ),
+                patch("cc_notifier.get_tmux_session_id", return_value=None),
+                patch("sys.stdin", StringIO(json.dumps(test_input))),
+                patch.object(sys, "argv", ["cc-notifier", "init"]),
+                patch.object(cc_notifier, "SESSION_DIR", session_dir),
+                patch.dict(os.environ, {"CC_NOTIFIER_WRAPPER": "1"}),
+            ):
+                cc_notifier.main()
+
+        run_init("compact123")
+        assert session_file.read_text().split("\n")[0] == "111"
+
+        # No session file yet (e.g. installed mid-session): compact still creates one
+        run_init("compact456")
+        assert (session_dir / "compact456").read_text().split("\n")[0] == "999"
+
     def test_init_workflow_without_hammerspoon(self, tmp_path):
         """Test init falls back to UNAVAILABLE but still captures tmux session ID."""
         test_input = {"session_id": "nohammer", "cwd": "/test/path"}

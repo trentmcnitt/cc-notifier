@@ -46,7 +46,7 @@ shell-lint: ## Lint shell scripts (preserved from original)
 
 check: ## Run comprehensive quality checks
 	@echo "🔍 Running comprehensive quality checks..."
-	@$(MAKE) -k format lint typecheck test deadcode shell-lint && echo "\n🎉 CHECK PASSED" || echo "\n❌ CHECK FAILED"
+	@$(MAKE) -k format lint typecheck test deadcode shell-lint && echo "\n🎉 CHECK PASSED" || (echo "\n❌ CHECK FAILED" && false)
 
 clean: ## Clean up temporary files
 	find . -type d -name "__pycache__" -exec rm -rf {} +

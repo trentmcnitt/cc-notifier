@@ -209,3 +209,29 @@ class TestITerm2Integration:
 
         mock_run_command.side_effect = RuntimeError("osascript failed")
         assert cc_notifier.get_iterm2_focused_session_id() == ""
+
+
+class TestExecutableLookup:
+    """Test resolving system binaries when hooks run with a minimal PATH."""
+
+    def test_find_executable_falls_back_when_path_is_minimal(self, tmp_path):
+        """Binaries outside PATH resolve via fallback dirs; ioreg uses the result."""
+        fake_ioreg = tmp_path / "ioreg"
+        fake_ioreg.write_text("#!/bin/sh\n")
+        fake_ioreg.chmod(0o755)
+
+        # Hook PATH without /usr/sbin used to raise FileNotFoundError for ioreg
+        with patch.dict(os.environ, {"PATH": "/nonexistent"}):
+            assert cc_notifier.find_executable("ioreg", str(tmp_path)) == str(
+                fake_ioreg
+            )
+            assert (
+                cc_notifier.find_executable("no-such-tool", str(tmp_path))
+                == "no-such-tool"
+            )
+
+        with patch(
+            "cc_notifier.run_command", return_value='  "HIDIdleTime" = 5000000000'
+        ) as mock_run:
+            assert cc_notifier.get_macos_idle_time() == 5
+            assert mock_run.call_args[0][0][0] == cc_notifier.IOREG
